@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { products } from "@/data/products";
+import Header from "../components/layout/Header";
 
 const categories = ["All", "Audio", "Power", "Wearables"];
 
@@ -56,49 +57,7 @@ export default function ProductsPage() {
   return (
     <main className="min-h-screen bg-[#050505] text-white">
       {/* HEADER */}
-      <header className="border-b border-white/10 bg-black">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6 lg:px-8">
-          <a
-            href="/"
-            className="text-2xl font-semibold tracking-[0.28em]"
-          >
-            VAELIS
-          </a>
-
-          <nav className="hidden items-center gap-10 text-sm text-white/60 md:flex">
-            <a href="/" className="transition hover:text-white">
-              Home
-            </a>
-
-            <a
-              href="/products"
-              className="text-white"
-            >
-              Products
-            </a>
-
-            <a href="/#story" className="transition hover:text-white">
-              Our Story
-            </a>
-
-            <a href="/#support" className="transition hover:text-white">
-              Support
-            </a>
-          </nav>
-
-          <div className="flex items-center gap-5">
-            <Search
-              size={19}
-              className="hidden text-white/60 md:block"
-            />
-
-            <ShoppingBag
-              size={19}
-              className="text-white/60"
-            />
-          </div>
-        </div>
-      </header>
+     <Header />
 
       {/* HERO */}
       <section className="border-b border-white/10 px-6 py-24">
