@@ -10,8 +10,9 @@ import {
 } from "lucide-react";
 import Header from "../../components/layout/Header";
 import { useCart } from "@/components/cart/CartProvider";
-
+import { useRouter } from "next/navigation";
 export default function CartPage() {
+  const router = useRouter();
   const {
     items,
     subtotal,
@@ -94,8 +95,15 @@ export default function CartPage() {
                         href={`/products/${item.product.slug}`}
                         className="flex h-40 w-full shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-800 via-zinc-950 to-black sm:h-40 sm:w-40"
                       >
-                        <div className="h-20 w-20 rounded-[24px] border border-white/10 bg-white/[0.04] shadow-2xl" />
-                      </a>
+                        {item.imageUrl ? (
+  <img
+    src={item.imageUrl}
+    alt={item.product.name}
+    className="h-full w-full object-contain p-5"
+  />
+) : (
+  <div className="h-20 w-20 rounded-[24px] border border-white/10 bg-white/[0.04] shadow-2xl" />
+)}</a>
 
                       {/* INFO */}
                       <div className="flex flex-1 flex-col">
@@ -247,11 +255,7 @@ export default function CartPage() {
               </div>
 
               <button
-                onClick={() =>
-                  alert(
-                    "Checkout will be connected to Razorpay in the next milestone.",
-                  )
-                }
+                onClick={() => router.push("/checkout")}
                 className="mt-8 flex w-full items-center justify-center gap-3 rounded-full bg-white px-6 py-4 text-sm font-medium text-black transition hover:bg-[#c9a227]"
               >
                 Proceed to Checkout
