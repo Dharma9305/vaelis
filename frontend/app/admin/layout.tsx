@@ -2,11 +2,18 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+
 import {
   LayoutDashboard,
   ShoppingBag,
   LogOut,
 } from "lucide-react";
+
+import {
+  getAdminCredentials,
+  clearAdminCredentials,
+} from "@/lib/adminAuth";
 
 export default function AdminLayout({
   children,
@@ -16,20 +23,72 @@ export default function AdminLayout({
   const pathname = usePathname();
   const router = useRouter();
 
-  function handleLogout() {
-    localStorage.removeItem("vaelis_admin_auth");
-    router.push("/admin/login");
-  }
+  const [checkingAuth, setCheckingAuth] =
+    useState(true);
 
   const isLoginPage =
     pathname === "/admin/login";
+
+  // =========================================================
+  // ADMIN AUTHENTICATION CHECK
+  // =========================================================
+
+  useEffect(() => {
+    if (isLoginPage) {
+      setCheckingAuth(false);
+      return;
+    }
+
+    const credentials =
+      getAdminCredentials();
+
+    if (!credentials) {
+      router.replace("/admin/login");
+      return;
+    }
+
+    setCheckingAuth(false);
+  }, [isLoginPage, router]);
+
+  // =========================================================
+  // LOGOUT
+  // =========================================================
+
+  function handleLogout() {
+    clearAdminCredentials();
+    router.push("/admin/login");
+  }
+
+  // =========================================================
+  // LOGIN PAGE
+  // =========================================================
 
   if (isLoginPage) {
     return <>{children}</>;
   }
 
+  // =========================================================
+  // AUTH CHECK LOADING
+  // =========================================================
+
+  if (checkingAuth) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#050505] text-white">
+        <p className="text-sm text-white/40">
+          Checking authentication...
+        </p>
+      </div>
+    );
+  }
+
+  // =========================================================
+  // ADMIN LAYOUT
+  // =========================================================
+
   return (
     <div className="min-h-screen bg-[#050505] text-white">
+
+      {/* HEADER */}
 
       <header className="sticky top-0 z-50 border-b border-white/10 bg-black/95 backdrop-blur">
 
@@ -48,6 +107,8 @@ export default function AdminLayout({
 
           <nav className="flex items-center gap-2">
 
+            {/* DASHBOARD */}
+
             <Link
               href="/admin"
               className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm transition ${
@@ -59,6 +120,8 @@ export default function AdminLayout({
               <LayoutDashboard size={16} />
               Dashboard
             </Link>
+
+            {/* ORDERS */}
 
             <Link
               href="/admin/orders"
@@ -73,6 +136,8 @@ export default function AdminLayout({
               <ShoppingBag size={16} />
               Orders
             </Link>
+
+            {/* LOGOUT */}
 
             <button
               onClick={handleLogout}

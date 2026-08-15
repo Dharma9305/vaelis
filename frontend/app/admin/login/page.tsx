@@ -2,7 +2,7 @@
 import API_BASE_URL from "@/lib/api";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-
+import {setAdminCredentials,} from "@/lib/adminAuth";
 export default function AdminLoginPage() {
   const router = useRouter();
 
@@ -50,10 +50,9 @@ export default function AdminLoginPage() {
       }
 
       // Save authentication for admin pages
-      localStorage.setItem(
-        "vaelis_admin_auth",
-        credentials
-      );
+     setAdminCredentials(
+  credentials
+);
 
       router.push("/admin/orders");
 

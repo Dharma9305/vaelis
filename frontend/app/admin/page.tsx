@@ -16,6 +16,11 @@ import {
   XCircle,
 } from "lucide-react";
 
+import {
+  getAdminCredentials,
+  clearAdminCredentials,
+} from "@/lib/adminAuth";
+
 type Order = {
   id: number;
   customerName: string;
@@ -45,9 +50,8 @@ export default function AdminDashboard() {
       setLoading(true);
       setError("");
 
-      const credentials =
-        localStorage.getItem("vaelis_admin_auth");
-
+     const credentials =
+  getAdminCredentials();
       if (!credentials) {
         window.location.href = "/admin/login";
         return;
@@ -67,9 +71,7 @@ export default function AdminDashboard() {
       );
 
       if (response.status === 401) {
-        localStorage.removeItem(
-          "vaelis_admin_auth"
-        );
+      clearAdminCredentials();
 
         window.location.href = "/admin/login";
         return;

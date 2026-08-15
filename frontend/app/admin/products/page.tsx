@@ -1,7 +1,10 @@
 "use client";
 import API_BASE_URL from "@/lib/api";
 import { useEffect, useState } from "react";
-
+import {
+  getAdminCredentials as getStoredAdminCredentials,
+  clearAdminCredentials,
+} from "@/lib/adminAuth";
 import {
   Plus,
   Search,
@@ -123,21 +126,19 @@ export default function AdminProductsPage() {
   // ADMIN AUTH
   // =========================
 
-  function getAdminCredentials() {
-    const credentials =
-      localStorage.getItem(
-        "vaelis_admin_auth"
-      );
+  function getAdminCredentials(): string | null {
+  const credentials =
+    getStoredAdminCredentials();
 
-    if (!credentials) {
-      window.location.href =
-        "/admin/login";
+  if (!credentials) {
+    window.location.href =
+      "/admin/login";
 
-      return null;
-    }
-
-    return credentials;
+    return null;
   }
+
+  return credentials;
+}
 
   // =========================
   // FORMAT AMOUNT
@@ -895,9 +896,7 @@ export default function AdminProductsPage() {
         );
 
       if (response.status === 401) {
-        localStorage.removeItem(
-          "vaelis_admin_auth"
-        );
+       clearAdminCredentials();
 
         window.location.href =
           "/admin/login";

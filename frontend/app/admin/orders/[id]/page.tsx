@@ -8,7 +8,10 @@ import {
   Check,
 } from "lucide-react";
 import { useParams } from "next/navigation";
-
+import {
+  getAdminCredentials,
+  clearAdminCredentials,
+} from "@/lib/adminAuth";
 type OrderItem = {
   id: number;
   productId: string;
@@ -182,13 +185,10 @@ setExpectedDeliveryDate(
       setSuccess("");
 
       const credentials =
-        localStorage.getItem(
-          "vaelis_admin_auth"
-        );
+  getAdminCredentials();
 
-      if (!credentials) {
-
-        window.location.href =
+if (!credentials) {
+      window.location.href =
           "/admin/login";
 
         return;
@@ -219,9 +219,7 @@ setExpectedDeliveryDate(
 
       if (response.status === 401) {
 
-        localStorage.removeItem(
-          "vaelis_admin_auth"
-        );
+        clearAdminCredentials();
 
         window.location.href =
           "/admin/login";

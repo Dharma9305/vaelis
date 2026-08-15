@@ -6,6 +6,10 @@ import {
   ArrowRight,
   RefreshCw,
 } from "lucide-react";
+import {
+  getAdminCredentials,
+  clearAdminCredentials,
+} from "@/lib/adminAuth";
 
 import * as XLSX from "xlsx";
 
@@ -87,9 +91,7 @@ export default function AdminOrdersPage() {
       setError("");
 
       const credentials =
-        localStorage.getItem(
-          "vaelis_admin_auth"
-        );
+  getAdminCredentials();
 
       if (!credentials) {
 
@@ -116,9 +118,7 @@ export default function AdminOrdersPage() {
 
       if (response.status === 401) {
 
-        localStorage.removeItem(
-          "vaelis_admin_auth"
-        );
+      clearAdminCredentials();
 
         window.location.href =
           "/admin/login";
