@@ -284,62 +284,102 @@ public class OrderService {
     // UPDATE ORDER STATUS
     // =========================================================
 
-    @Transactional
-    public Order updateOrderStatus(
-            Long orderId,
-            String orderStatus) {
+   @Transactional
+public Order updateOrderStatus(
+        Long orderId,
+        String orderStatus) {
 
-        Order order =
-                orderRepository
-                        .findById(orderId)
-                        .orElseThrow(() ->
-                                new RuntimeException(
-                                        "Order not found: "
-                                                + orderId
-                                )
-                        );
+    Order order =
+            orderRepository
+                    .findById(orderId)
+                    .orElseThrow(() ->
+                            new RuntimeException(
+                                    "Order not found: "
+                                            + orderId
+                            )
+                    );
 
-        if (!orderStatus.equals("PLACED") &&
-                !orderStatus.equals("CONFIRMED") &&
-                !orderStatus.equals("PROCESSING") &&
-                !orderStatus.equals("SHIPPED") &&
-                !orderStatus.equals("DELIVERED") &&
-                !orderStatus.equals("CANCELLED")) {
+    if (orderStatus == null ||
+            (!orderStatus.equals("PLACED") &&
+             !orderStatus.equals("CONFIRMED") &&
+             !orderStatus.equals("PROCESSING") &&
+             !orderStatus.equals("SHIPPED") &&
+             !orderStatus.equals("DELIVERED") &&
+             !orderStatus.equals("CANCELLED"))) {
 
-            throw new IllegalArgumentException(
-                    "Invalid order status"
-            );
-        }
+        throw new IllegalArgumentException(
+                "Invalid order status"
+        );
+    }
 
-        order.setOrderStatus(
-                orderStatus
+    String currentStatus =
+            order.getOrderStatus();
+
+    boolean validTransition =
+            switch (currentStatus) {
+
+                case "PLACED" ->
+                        orderStatus.equals("CONFIRMED") ||
+                        orderStatus.equals("CANCELLED");
+
+                case "CONFIRMED" ->
+                        orderStatus.equals("PROCESSING") ||
+                        orderStatus.equals("CANCELLED");
+
+                case "PROCESSING" ->
+                        orderStatus.equals("SHIPPED") ||
+                        orderStatus.equals("CANCELLED");
+
+                case "SHIPPED" ->
+                        orderStatus.equals("DELIVERED");
+
+                case "DELIVERED",
+                     "CANCELLED" ->
+                        false;
+
+                default ->
+                        false;
+            };
+
+    if (!validTransition) {
+
+        throw new IllegalStateException(
+                "Invalid order status transition: "
+                        + currentStatus
+                        + " -> "
+                        + orderStatus
+        );
+    }
+
+    order.setOrderStatus(
+            orderStatus
+    );
+
+    Order savedOrder =
+            orderRepository.save(order);
+
+    // =====================================================
+    // STATUS UPDATE EMAIL
+    // =====================================================
+
+    try {
+
+        emailService.sendOrderStatusEmail(
+                savedOrder
         );
 
-        Order savedOrder =
-                orderRepository.save(order);
+    } catch (Exception e) {
 
-        // =====================================================
-        // STATUS UPDATE EMAIL
-        // =====================================================
+        System.err.println(
+                "Order status email could not be sent: "
+                        + e.getMessage()
+        );
 
-        try {
-
-            emailService.sendOrderStatusEmail(
-                    savedOrder
-            );
-
-        } catch (Exception e) {
-
-            System.err.println(
-                    "Order status email could not be sent: "
-                            + e.getMessage()
-            );
-
-            e.printStackTrace();
-        }
-
-        return savedOrder;
+        e.printStackTrace();
     }
+
+    return savedOrder;
+}
 
     // =========================================================
     // UPDATE SHIPMENT

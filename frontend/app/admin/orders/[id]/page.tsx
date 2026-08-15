@@ -53,7 +53,51 @@ const orderStatuses = [
   "SHIPPED",
   "DELIVERED",
 ];
+function getAvailableOrderStatuses(
+  currentStatus: string
+): string[] {
+  switch (currentStatus) {
+    case "PLACED":
+      return [
+        "PLACED",
+        "CONFIRMED",
+        "CANCELLED",
+      ];
 
+    case "CONFIRMED":
+      return [
+        "CONFIRMED",
+        "PROCESSING",
+        "CANCELLED",
+      ];
+
+    case "PROCESSING":
+      return [
+        "PROCESSING",
+        "SHIPPED",
+        "CANCELLED",
+      ];
+
+    case "SHIPPED":
+      return [
+        "SHIPPED",
+        "DELIVERED",
+      ];
+
+    case "DELIVERED":
+      return [
+        "DELIVERED",
+      ];
+
+    case "CANCELLED":
+      return [
+        "CANCELLED",
+      ];
+
+    default:
+      return [currentStatus];
+  }
+}
 export default function AdminOrderDetailsPage() {
 
   const params = useParams();
@@ -906,51 +950,31 @@ if (!credentials) {
 
               </p>
 
-
               <select
-                value={
-                  order.orderStatus
-                }
-                onChange={(e) => {
+  value={order.orderStatus}
+  onChange={(e) => {
+    setSuccess("");
+    setError("");
 
-                  setSuccess("");
-                  setError("");
+    setOrder({
+      ...order,
+      orderStatus: e.target.value,
+    });
+  }}
+  className="mt-5 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-white/30"
+>
+  {getAvailableOrderStatuses(
+    order.orderStatus
+  ).map((status) => (
+    <option
+      key={status}
+      value={status}
+    >
+      {status}
+    </option>
+  ))}
+</select>
 
-                  setOrder({
-                    ...order,
-                    orderStatus:
-                      e.target.value,
-                  });
-
-                }}
-                className="mt-5 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-white/30"
-              >
-
-                <option value="PLACED">
-                  PLACED
-                </option>
-
-                <option value="CONFIRMED">
-                  CONFIRMED
-                </option>
-
-                <option value="PROCESSING">
-                  PROCESSING
-                </option>
-
-                <option value="SHIPPED">
-                  SHIPPED
-                </option>
-
-                <option value="DELIVERED">
-                  DELIVERED
-                </option>
-
-                <option value="CANCELLED">
-                  CANCELLED
-                </option>
-
-              </select>
 
 
               <button
@@ -977,7 +1001,7 @@ if (!credentials) {
               </button>
 
             </section>
-                
+
                 {/* SHIPMENT */}
 
 <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-7">
