@@ -379,9 +379,16 @@ export default function CheckoutPage() {
 
         const data = result.data;
 
-        const normalize = (
-          value: string
-        ) =>
+if (!data) {
+  setPincodeError(
+    "Unable to retrieve details for this pincode."
+  );
+  return;
+}
+
+const normalize = (
+  value: string
+) =>
           value
             .trim()
             .toLowerCase()
