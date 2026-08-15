@@ -2,7 +2,7 @@
 import API_BASE_URL from "@/lib/api";
 import { useEffect, useState } from "react";
 import {
-  getAdminCredentials as getStoredAdminCredentials,
+  getAdminCredentials,
   clearAdminCredentials,
 } from "@/lib/adminAuth";
 import {
@@ -121,24 +121,6 @@ export default function AdminProductsPage() {
 
   const [uploadStatus, setUploadStatus] =
     useState("");
-
-  // =========================
-  // ADMIN AUTH
-  // =========================
-
-  function getAdminCredentials(): string | null {
-  const credentials =
-    getStoredAdminCredentials();
-
-  if (!credentials) {
-    window.location.href =
-      "/admin/login";
-
-    return null;
-  }
-
-  return credentials;
-}
 
   // =========================
   // FORMAT AMOUNT
@@ -464,16 +446,20 @@ export default function AdminProductsPage() {
   // ADD SPECIFICATION
   // =========================
 
-  function addSpecification() {
-    const label =
-      newSpecLabel.trim();
+    function addSpecification() {
+  const label =
+    newSpecLabel.trim();
 
-    const value =
-      newSpecValue.trim();
+  const value =
+    newSpecValue.trim();
 
-    if (!label || !value) {
-      return;
-    }
+  if (!label || !value) {
+    return;
+  }
+
+  if (label.length > 100) {
+    return;
+  }
 
     setForm(
       (previous) => ({
@@ -2433,18 +2419,15 @@ export default function AdminProductsPage() {
 
                 <div className="grid gap-3 sm:grid-cols-[1fr_1.5fr_auto]">
 
-                  <input
-                    value={
-                      newSpecLabel
-                    }
-                    onChange={(e) =>
-                      setNewSpecLabel(
-                        e.target.value
-                      )
-                    }
-                    placeholder="Label"
-                    className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm outline-none placeholder:text-white/20 focus:border-white/30"
-                  />
+                 <input
+  value={newSpecLabel}
+  onChange={(e) =>
+    setNewSpecLabel(e.target.value)
+  }
+  maxLength={100}
+  placeholder="Label (max 100 characters)"
+  className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm outline-none placeholder:text-white/20 focus:border-white/30"
+/>
 
                   <input
                     value={

@@ -1,7 +1,11 @@
 "use client";
 import API_BASE_URL from "@/lib/api";
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowRight,
   RefreshCw,
@@ -49,6 +53,8 @@ type Order = {
 
 export default function AdminOrdersPage() {
 
+    const searchParams =
+    useSearchParams();
   const [orders, setOrders] =
     useState<Order[]>([]);
 
@@ -78,6 +84,32 @@ export default function AdminOrdersPage() {
 
   const ordersPerPage = 10;
 
+    // =========================
+  // URL FILTER INITIALIZATION
+  // =========================
+
+  useEffect(() => {
+    const payment =
+      searchParams.get("payment");
+
+    const status =
+      searchParams.get("status");
+
+    const shipment =
+      searchParams.get("shipment");
+
+    if (payment) {
+      setPaymentFilter(payment);
+    }
+
+    if (status) {
+      setStatusFilter(status);
+    }
+
+    if (shipment) {
+      setShipmentFilter(shipment);
+    }
+  }, [searchParams]);
 
   // =========================
   // FETCH ORDERS

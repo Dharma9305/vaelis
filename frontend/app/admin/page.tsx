@@ -14,12 +14,15 @@ import {
   TrendingUp,
   Truck,
   XCircle,
+  Package,
 } from "lucide-react";
 
 import {
   getAdminCredentials,
   clearAdminCredentials,
 } from "@/lib/adminAuth";
+
+
 
 type Order = {
   id: number;
@@ -468,26 +471,31 @@ export default function AdminDashboard() {
 
           {/* PENDING PAYMENTS */}
 
-          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+          {/* PENDING PAYMENTS */}
 
-            <div className="flex items-center justify-between">
+<Link
+  href="/admin/orders?payment=PENDING"
+  className="block rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-yellow-400/20 hover:bg-white/[0.05]"
+>
 
-              <p className="text-sm text-white/40">
-                Pending Payments
-              </p>
+  <div className="flex items-center justify-between">
 
-              <Clock
-                size={20}
-                className="text-yellow-400/60"
-              />
+    <p className="text-sm text-white/40">
+      Pending Payments
+    </p>
 
-            </div>
+    <Clock
+      size={20}
+      className="text-yellow-400/60"
+    />
 
-            <p className="mt-5 text-3xl font-medium">
-              {pendingPayments}
-            </p>
+  </div>
 
-          </div>
+  <p className="mt-5 text-3xl font-medium">
+    {pendingPayments}
+  </p>
+
+</Link>
 
           {/* REVENUE */}
 
@@ -522,26 +530,31 @@ export default function AdminDashboard() {
 
           {/* CONFIRMED */}
 
-          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+          {/* CONFIRMED */}
 
-            <div className="flex items-center justify-between">
+<Link
+  href="/admin/orders?status=CONFIRMED"
+  className="block rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-blue-400/20 hover:bg-white/[0.05]"
+>
 
-              <p className="text-sm text-white/40">
-                Confirmed Orders
-              </p>
+  <div className="flex items-center justify-between">
 
-              <CheckCircle2
-                size={20}
-                className="text-blue-400/60"
-              />
+    <p className="text-sm text-white/40">
+      Confirmed Orders
+    </p>
 
-            </div>
+    <CheckCircle2
+      size={20}
+      className="text-blue-400/60"
+    />
 
-            <p className="mt-5 text-3xl font-medium">
-              {confirmedOrders}
-            </p>
+  </div>
 
-          </div>
+  <p className="mt-5 text-3xl font-medium">
+    {confirmedOrders}
+  </p>
+
+</Link>
 
           {/* TODAY */}
 
@@ -599,28 +612,32 @@ export default function AdminDashboard() {
 
         <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
 
+
           {/* SHIPPED */}
 
-          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+<Link
+  href="/admin/orders?status=SHIPPED"
+  className="block rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-purple-400/20 hover:bg-white/[0.05]"
+>
 
-            <div className="flex items-center justify-between">
+  <div className="flex items-center justify-between">
 
-              <p className="text-sm text-white/40">
-                Shipped Orders
-              </p>
+    <p className="text-sm text-white/40">
+      Shipped Orders
+    </p>
 
-              <Truck
-                size={20}
-                className="text-cyan-400/60"
-              />
+    <Truck
+      size={20}
+      className="text-purple-400/60"
+    />
 
-            </div>
+  </div>
 
-            <p className="mt-5 text-3xl font-medium">
-              {shippedOrders}
-            </p>
+  <p className="mt-5 text-3xl font-medium">
+    {shippedOrders}
+  </p>
 
-          </div>
+</Link>
 
           {/* DELIVERED */}
 
@@ -670,28 +687,32 @@ export default function AdminDashboard() {
 
           {/* SHIPMENT PENDING */}
 
-          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+          {/* SHIPMENT PENDING */}
 
-            <div className="flex items-center justify-between">
+<Link
+  href="/admin/orders?shipment=NOT_SHIPPED"
+  className="block rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-cyan-400/20 hover:bg-white/[0.05]"
+>
 
-              <p className="text-sm text-white/40">
-                Shipment Pending
-              </p>
+  <div className="flex items-center justify-between">
 
-              <ShoppingBag
-                size={20}
-                className="text-yellow-400/60"
-              />
+    <p className="text-sm text-white/40">
+      Shipment Pending
+    </p>
 
-            </div>
+    <Package
+      size={20}
+      className="text-cyan-400/60"
+    />
 
-            <p className="mt-5 text-3xl font-medium">
-              {shipmentPending}
-            </p>
+  </div>
 
-          </div>
+  <p className="mt-5 text-3xl font-medium">
+    {shipmentPending}
+  </p>
 
-        </div>
+</Link>
+</div>
 
         {/* REVENUE CHART */}
 
