@@ -169,17 +169,49 @@ export default function TrackOrderPage() {
 
   function getCurrentStep() {
 
-    if (!order) {
-      return 0;
-    }
-
-    const index =
-      statuses.indexOf(
-        order.orderStatus
-      );
-
-    return index >= 0 ? index : 0;
+  if (!order) {
+    return 0;
   }
+
+  const index =
+    statuses.indexOf(
+      order.orderStatus
+    );
+
+  return index >= 0 ? index : 0;
+}
+
+
+function getStatusMessage() {
+
+  if (!order) {
+    return "";
+  }
+
+  switch (order.orderStatus) {
+
+    case "PLACED":
+      return "Your order has been placed successfully.";
+
+    case "CONFIRMED":
+      return "Your order has been confirmed.";
+
+    case "PROCESSING":
+      return "Your order is being prepared for shipment.";
+
+    case "SHIPPED":
+      return "Your package is on its way.";
+
+    case "DELIVERED":
+      return "Your order has been delivered successfully.";
+
+    case "CANCELLED":
+      return "This order has been cancelled.";
+
+    default:
+      return "Your order status has been updated.";
+  }
+}
 
 
   if (loading) {
@@ -397,8 +429,8 @@ export default function TrackOrderPage() {
                 </h2>
 
                 <p className="mt-1 text-xs text-white/30">
-                  Your package is on its way.
-                </p>
+  {getStatusMessage()}
+</p>
 
               </div>
 
