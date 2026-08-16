@@ -60,6 +60,12 @@ export default function OrderDetailsPage() {
   const [error, setError] =
     useState("");
 
+      const [cancelling, setCancelling] =
+    useState(false);
+
+  const [cancelMessage, setCancelMessage] =
+    useState("");
+
   useEffect(() => {
     if (!orderId) return;
 
@@ -95,6 +101,83 @@ export default function OrderDetailsPage() {
     loadOrder();
   }, [orderId]);
 
+    // =========================================================
+  // CANCEL ORDER
+  // =========================================================
+
+  async function cancelOrder() {
+
+    if (!order) {
+      return;
+    }
+
+    if (
+      order.orderStatus !== "PLACED" &&
+      order.orderStatus !== "CONFIRMED" &&
+      order.orderStatus !== "PROCESSING"
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "Are you sure you want to cancel this order?"
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+
+      setCancelling(true);
+      setCancelMessage("");
+      setError("");
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/orders/${order.id}/cancel`,
+          {
+            method: "POST",
+          }
+        );
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          "Unable to cancel order."
+        );
+      }
+
+      const updatedOrder =
+        await response.json();
+
+      setOrder(updatedOrder);
+
+      setCancelMessage(
+        "Your order has been cancelled successfully."
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Unable to cancel order."
+      );
+
+    } finally {
+
+      setCancelling(false);
+
+    }
+  }
   // =========================================================
   // LOADING
   // =========================================================
@@ -590,8 +673,48 @@ export default function OrderDetailsPage() {
           </div>
 
         </div>
+    {/* =================================================
+            CANCEL ORDER
+        ================================================= */}
 
-        {/* =================================================
+        {(
+          order.orderStatus === "PLACED" ||
+          order.orderStatus === "CONFIRMED" ||
+          order.orderStatus === "PROCESSING"
+        ) && (
+
+          <div className="mt-8 rounded-[30px] border border-red-500/20 bg-red-500/[0.03] p-8">
+
+            <h2 className="text-lg font-medium">
+              Cancel Order
+            </h2>
+
+            <p className="mt-2 text-sm text-white/40">
+              You can cancel this order before it is shipped.
+            </p>
+
+            {cancelMessage && (
+
+              <p className="mt-4 text-sm text-green-400">
+                {cancelMessage}
+              </p>
+
+            )}
+
+            <button
+              type="button"
+              onClick={cancelOrder}
+              disabled={cancelling}
+              className="mt-5 rounded-full border border-red-500/30 px-6 py-3 text-sm font-medium text-red-400 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {cancelling
+                ? "Cancelling..."
+                : "Cancel Order"}
+            </button>
+
+          </div>
+
+        )}        {/* =================================================
             CONTINUE SHOPPING
         ================================================= */}
 

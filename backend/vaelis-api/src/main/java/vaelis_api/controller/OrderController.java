@@ -1,5 +1,7 @@
 package vaelis_api.controller;
+
 import java.util.List;
+
 import vaelis_api.entity.Order;
 import vaelis_api.service.OrderService;
 
@@ -28,22 +30,60 @@ public class OrderController {
     }
 
     @GetMapping("/{id}")
-public ResponseEntity<Order> getOrder(
-        @PathVariable Long id) {
+    public ResponseEntity<Order> getOrder(
+            @PathVariable Long id) {
 
-    return orderService
-            .getOrderById(id)
-            .map(ResponseEntity::ok)
-            .orElseGet(() ->
-                    ResponseEntity.notFound().build()
+        return orderService
+                .getOrderById(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() ->
+                        ResponseEntity.notFound().build()
+                );
+    }
+
+    @GetMapping
+    public ResponseEntity<List<Order>> getOrders(
+            @RequestParam String email) {
+
+        return ResponseEntity.ok(
+                orderService.getOrdersByEmail(email)
+        );
+    }
+
+    // =========================================================
+    // CUSTOMER CANCEL ORDER
+    // =========================================================
+
+    @PostMapping("/{orderId}/cancel")
+    public ResponseEntity<?> cancelOrder(
+            @PathVariable Long orderId) {
+
+        try {
+
+            Order cancelledOrder =
+                    orderService.updateOrderStatus(
+                            orderId,
+                            "CANCELLED"
+                    );
+
+            return ResponseEntity.ok(
+                    cancelledOrder
             );
-}
-@GetMapping
-public ResponseEntity<List<Order>> getOrders(
-        @RequestParam String email) {
 
-    return ResponseEntity.ok(
-            orderService.getOrdersByEmail(email)
-    );
-}
+        } catch (IllegalArgumentException e) {
+
+            return ResponseEntity.badRequest()
+                    .body(e.getMessage());
+
+        } catch (IllegalStateException e) {
+
+            return ResponseEntity.badRequest()
+                    .body(e.getMessage());
+
+        } catch (RuntimeException e) {
+
+            return ResponseEntity.notFound()
+                    .build();
+        }
+    }
 }
