@@ -1080,24 +1080,92 @@ if (!credentials) {
 
   {/* EXPECTED DELIVERY */}
 
-  <div className="mt-5">
+  {/* EXPECTED DELIVERY */}
 
-    <label className="text-xs text-white/40">
-      Expected Delivery
-    </label>
+<div className="mt-5">
+
+  <label className="text-xs text-white/40">
+    Expected Delivery
+  </label>
+
+  <div className="relative">
+
+    <input
+      type="text"
+      value={
+        expectedDeliveryDate
+          ? expectedDeliveryDate
+              .split("-")
+              .reverse()
+              .join("")
+          : ""
+      }
+      onChange={(e) => {
+
+        const digits =
+          e.target.value
+            .replace(/\D/g, "")
+            .slice(0, 8);
+
+        if (digits.length === 8) {
+
+          const day =
+            digits.slice(0, 2);
+
+          const month =
+            digits.slice(2, 4);
+
+          const year =
+            digits.slice(4, 8);
+
+          setExpectedDeliveryDate(
+            `${year}-${month}-${day}`
+          );
+
+        } else {
+
+          setExpectedDeliveryDate(
+            digits
+          );
+        }
+
+      }}
+      placeholder="DDMMYYYY"
+      inputMode="numeric"
+      maxLength={8}
+      className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 pr-12 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
+    />
 
     <input
       type="date"
-      value={expectedDeliveryDate}
+      value={
+        expectedDeliveryDate &&
+        /^\d{4}-\d{2}-\d{2}$/.test(
+          expectedDeliveryDate
+        )
+          ? expectedDeliveryDate
+          : ""
+      }
       onChange={(e) =>
         setExpectedDeliveryDate(
           e.target.value
         )
       }
-      className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-white/30"
+      className="absolute right-3 top-1/2 mt-1 h-6 w-6 -translate-y-1/2 cursor-pointer opacity-0"
+      aria-label="Choose expected delivery date"
     />
 
+    <span className="pointer-events-none absolute right-3 top-1/2 mt-1 -translate-y-1/2 text-white/40">
+      📅
+    </span>
+
   </div>
+
+  <p className="mt-2 text-xs text-white/25">
+    Enter DDMMYYYY manually or use the calendar.
+  </p>
+
+</div>
 
 
   {/* SAVE */}

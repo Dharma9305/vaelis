@@ -284,102 +284,132 @@ public class OrderService {
     // UPDATE ORDER STATUS
     // =========================================================
 
-   @Transactional
-public Order updateOrderStatus(
-        Long orderId,
-        String orderStatus) {
+    @Transactional
+    public Order updateOrderStatus(
+            Long orderId,
+            String orderStatus) {
 
-    Order order =
-            orderRepository
-                    .findById(orderId)
-                    .orElseThrow(() ->
-                            new RuntimeException(
-                                    "Order not found: "
-                                            + orderId
-                            )
-                    );
+        Order order =
+                orderRepository
+                        .findById(orderId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Order not found: "
+                                                + orderId
+                                )
+                        );
 
-    if (orderStatus == null ||
-            (!orderStatus.equals("PLACED") &&
-             !orderStatus.equals("CONFIRMED") &&
-             !orderStatus.equals("PROCESSING") &&
-             !orderStatus.equals("SHIPPED") &&
-             !orderStatus.equals("DELIVERED") &&
-             !orderStatus.equals("CANCELLED"))) {
+        if (orderStatus == null ||
+                (!orderStatus.equals("PLACED") &&
+                 !orderStatus.equals("CONFIRMED") &&
+                 !orderStatus.equals("PROCESSING") &&
+                 !orderStatus.equals("SHIPPED") &&
+                 !orderStatus.equals("DELIVERED") &&
+                 !orderStatus.equals("CANCELLED"))) {
 
-        throw new IllegalArgumentException(
-                "Invalid order status"
+            throw new IllegalArgumentException(
+                    "Invalid order status"
+            );
+        }
+
+        String currentStatus =
+                order.getOrderStatus();
+
+        // =====================================================
+        // SHIPMENT DETAILS REQUIRED BEFORE SHIPPING
+        // =====================================================
+
+        if ("PROCESSING".equals(currentStatus) &&
+                "SHIPPED".equals(orderStatus)) {
+
+            if (order.getShippingPartner() == null ||
+                    order.getShippingPartner().isBlank()) {
+
+                throw new IllegalArgumentException(
+                        "Shipping partner is required before "
+                                + "marking the order as SHIPPED."
+                );
+            }
+
+            if (order.getTrackingNumber() == null ||
+                    order.getTrackingNumber().isBlank()) {
+
+                throw new IllegalArgumentException(
+                        "Tracking/AWB number is required before "
+                                + "marking the order as SHIPPED."
+                );
+            }
+        }
+
+        // =====================================================
+        // VALID STATUS TRANSITION
+        // =====================================================
+
+        boolean validTransition =
+                switch (currentStatus) {
+
+                    case "PLACED" ->
+                            orderStatus.equals("CONFIRMED") ||
+                            orderStatus.equals("CANCELLED");
+
+                    case "CONFIRMED" ->
+                            orderStatus.equals("PROCESSING") ||
+                            orderStatus.equals("CANCELLED");
+
+                    case "PROCESSING" ->
+                            orderStatus.equals("SHIPPED") ||
+                            orderStatus.equals("CANCELLED");
+
+                    case "SHIPPED" ->
+                            orderStatus.equals("DELIVERED");
+
+                    case "DELIVERED",
+                         "CANCELLED" ->
+                            false;
+
+                    default ->
+                            false;
+                };
+
+        if (!validTransition) {
+
+            throw new IllegalStateException(
+                    "Invalid order status transition: "
+                            + currentStatus
+                            + " -> "
+                            + orderStatus
+            );
+        }
+
+        order.setOrderStatus(
+                orderStatus
         );
+
+        Order savedOrder =
+                orderRepository.save(order);
+
+        // =====================================================
+        // STATUS UPDATE EMAIL
+        // =====================================================
+
+        try {
+
+            emailService.sendOrderStatusEmail(
+                    savedOrder
+            );
+
+        } catch (Exception e) {
+
+            System.err.println(
+                    "Order status email could not be sent: "
+                            + e.getMessage()
+            );
+
+            e.printStackTrace();
+        }
+
+        return savedOrder;
     }
-
-    String currentStatus =
-            order.getOrderStatus();
-
-    boolean validTransition =
-            switch (currentStatus) {
-
-                case "PLACED" ->
-                        orderStatus.equals("CONFIRMED") ||
-                        orderStatus.equals("CANCELLED");
-
-                case "CONFIRMED" ->
-                        orderStatus.equals("PROCESSING") ||
-                        orderStatus.equals("CANCELLED");
-
-                case "PROCESSING" ->
-                        orderStatus.equals("SHIPPED") ||
-                        orderStatus.equals("CANCELLED");
-
-                case "SHIPPED" ->
-                        orderStatus.equals("DELIVERED");
-
-                case "DELIVERED",
-                     "CANCELLED" ->
-                        false;
-
-                default ->
-                        false;
-            };
-
-    if (!validTransition) {
-
-        throw new IllegalStateException(
-                "Invalid order status transition: "
-                        + currentStatus
-                        + " -> "
-                        + orderStatus
-        );
-    }
-
-    order.setOrderStatus(
-            orderStatus
-    );
-
-    Order savedOrder =
-            orderRepository.save(order);
-
-    // =====================================================
-    // STATUS UPDATE EMAIL
-    // =====================================================
-
-    try {
-
-        emailService.sendOrderStatusEmail(
-                savedOrder
-        );
-
-    } catch (Exception e) {
-
-        System.err.println(
-                "Order status email could not be sent: "
-                        + e.getMessage()
-        );
-
-        e.printStackTrace();
-    }
-
-    return savedOrder;
-}
 
     // =========================================================
     // UPDATE SHIPMENT
@@ -403,17 +433,61 @@ public Order updateOrderStatus(
                                 )
                         );
 
+        String currentStatus =
+                order.getOrderStatus();
+
+        // =====================================================
+        // SHIPMENT CAN ONLY BE ADDED/UPDATED DURING PROCESSING
+        // OR SHIPPED
+        // =====================================================
+
+        if (!"PROCESSING".equals(currentStatus) &&
+                !"SHIPPED".equals(currentStatus)) {
+
+            throw new IllegalStateException(
+                    "Shipment can only be added or updated "
+                            + "for orders in PROCESSING or SHIPPED status."
+            );
+        }
+
+        // =====================================================
+        // REQUIRED SHIPMENT DETAILS
+        // =====================================================
+
+        if (shippingPartner == null ||
+                shippingPartner.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Shipping partner is required"
+            );
+        }
+
+        if (trackingNumber == null ||
+                trackingNumber.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Tracking number is required"
+            );
+        }
+
         order.setShippingPartner(
-                shippingPartner
+                shippingPartner.trim()
         );
 
         order.setTrackingNumber(
-                trackingNumber
+                trackingNumber.trim()
         );
 
         order.setTrackingUrl(
-                trackingUrl
+                trackingUrl == null ||
+                        trackingUrl.isBlank()
+                        ? null
+                        : trackingUrl.trim()
         );
+
+        // =====================================================
+        // EXPECTED DELIVERY DATE
+        // =====================================================
 
         if (expectedDeliveryDate != null &&
                 !expectedDeliveryDate.isBlank()) {
@@ -422,7 +496,7 @@ public Order updateOrderStatus(
 
                 order.setExpectedDeliveryDate(
                         java.time.LocalDate.parse(
-                                expectedDeliveryDate
+                                expectedDeliveryDate.trim()
                         )
                 );
 
@@ -443,9 +517,6 @@ public Order updateOrderStatus(
             );
         }
 
-        Order savedOrder =
-                orderRepository.save(order);
-
-        return savedOrder;
+        return orderRepository.save(order);
     }
 }
