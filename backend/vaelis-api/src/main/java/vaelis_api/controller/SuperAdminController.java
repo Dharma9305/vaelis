@@ -651,7 +651,150 @@ public class SuperAdminController {
                     .body(e.getMessage());
         }
     }
+    // =========================================================
+    // DELETED USERS
+    // =========================================================
 
+    @GetMapping("/deleted-users")
+    public ResponseEntity<?> getDeletedUsers(
+            Authentication authentication) {
+
+        if (!isSuperAdmin(authentication)) {
+
+            return forbidden(
+                    "Only SUPER_ADMIN can view deleted users."
+            );
+        }
+
+        return ResponseEntity.ok(
+                adminApprovalService
+                        .getDeletedUsers()
+                        .stream()
+                        .map(AdminUserResponse::new)
+                        .toList()
+        );
+    }
+
+    // =========================================================
+    // DELETED EMPLOYEES
+    // =========================================================
+
+    @GetMapping("/deleted-users/employees")
+    public ResponseEntity<?> getDeletedEmployees(
+            Authentication authentication) {
+
+        if (!isSuperAdmin(authentication)) {
+
+            return forbidden(
+                    "Only SUPER_ADMIN can view deleted Employees."
+            );
+        }
+
+        return ResponseEntity.ok(
+                adminApprovalService
+                        .getDeletedEmployees()
+                        .stream()
+                        .map(AdminUserResponse::new)
+                        .toList()
+        );
+    }
+
+    // =========================================================
+    // DELETED ADMINS
+    // =========================================================
+
+    @GetMapping("/deleted-users/admins")
+    public ResponseEntity<?> getDeletedAdmins(
+            Authentication authentication) {
+
+        if (!isSuperAdmin(authentication)) {
+
+            return forbidden(
+                    "Only SUPER_ADMIN can view deleted Admin accounts."
+            );
+        }
+
+        return ResponseEntity.ok(
+                adminApprovalService
+                        .getDeletedAdmins()
+                        .stream()
+                        .map(AdminUserResponse::new)
+                        .toList()
+        );
+    }
+
+    // =========================================================
+    // DELETED ACCOUNT MANAGERS
+    // =========================================================
+
+    @GetMapping("/deleted-users/account-managers")
+    public ResponseEntity<?> getDeletedAccountManagers(
+            Authentication authentication) {
+
+        if (!isSuperAdmin(authentication)) {
+
+            return forbidden(
+                    "Only SUPER_ADMIN can view deleted Account Managers."
+            );
+        }
+
+        return ResponseEntity.ok(
+                adminApprovalService
+                        .getDeletedAccountManagers()
+                        .stream()
+                        .map(AdminUserResponse::new)
+                        .toList()
+        );
+    }
+
+    // =========================================================
+    // RESTORE DELETED USER
+    // =========================================================
+    //
+    // IMPORTANT:
+    // Restore only removes the soft-delete flag.
+    //
+    // deleted = false
+    // enabled = false
+    //
+    // The account remains disabled until SUPER_ADMIN
+    // explicitly enables it.
+    // =========================================================
+
+    @PostMapping("/users/{userId}/restore")
+    public ResponseEntity<?> restoreDeletedUser(
+            @PathVariable Long userId,
+            Authentication authentication) {
+
+        if (!isSuperAdmin(authentication)) {
+
+            return forbidden(
+                    "Only SUPER_ADMIN can restore deleted users."
+            );
+        }
+
+        try {
+
+            AdminUser restoredUser =
+                    adminApprovalService
+                            .restoreDeletedUser(
+                                    userId
+                            );
+
+            return ResponseEntity.ok(
+                    new AdminUserResponse(
+                            restoredUser
+                    )
+            );
+
+        } catch (IllegalArgumentException |
+                 IllegalStateException e) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(e.getMessage());
+        }
+    }
     // =========================================================
     // SUPER ADMIN CHECK
     // =========================================================

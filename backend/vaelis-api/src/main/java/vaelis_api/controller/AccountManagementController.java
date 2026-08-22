@@ -1,5 +1,6 @@
 package vaelis_api.controller;
-
+import vaelis_api.service.AdminPermissionService;
+import vaelis_api.entity.AdminPermission;
 import vaelis_api.dto.AdminRegistrationRequest;
 import vaelis_api.dto.AdminUserResponse;
 import vaelis_api.dto.PasswordChangeRequest;
@@ -28,17 +29,23 @@ public class AccountManagementController {
 
     private final AdminAuthorizationService
             adminAuthorizationService;
+    
+    private final AdminPermissionService adminPermissionService;
 
     public AccountManagementController(
-            AccountManagementService accountManagementService,
-            AdminAuthorizationService adminAuthorizationService) {
+        AccountManagementService accountManagementService,
+        AdminAuthorizationService adminAuthorizationService,
+        AdminPermissionService adminPermissionService) {
 
-        this.accountManagementService =
-                accountManagementService;
+    this.accountManagementService =
+            accountManagementService;
 
-        this.adminAuthorizationService =
-                adminAuthorizationService;
-    }
+    this.adminAuthorizationService =
+            adminAuthorizationService;
+
+    this.adminPermissionService =
+            adminPermissionService;
+}
 
     // =========================================================
     // VIEW MANAGEABLE USER ACCOUNTS
@@ -547,6 +554,87 @@ public ResponseEntity<?> deleteUser(
                 )
                 .body(
                         "Unable to delete account."
+                );
+    }
+}
+// =========================================================
+// MANAGE USER PERMISSIONS
+// =========================================================
+//
+// Account Manager requires:
+//     ACCOUNT_USERS_PERMISSIONS
+//
+// Adds one permission to a manageable ADMIN / ACCOUNT_MANAGER.
+// The existing AdminPermissionService performs the target-role
+// and permission validation.
+// =========================================================
+
+@PostMapping("/users/{userId}/permissions/{permissionId}")
+public ResponseEntity<?> addUserPermission(
+        @PathVariable Long userId,
+        @PathVariable Long permissionId,
+        Authentication authentication) {
+
+    try {
+
+        // =====================================================
+        // PERMISSION CHECK
+        // =====================================================
+
+        adminAuthorizationService
+                .requirePermission(
+                        authentication,
+                        "ACCOUNT_USERS_PERMISSIONS"
+                );
+
+        // =====================================================
+        // ADD PERMISSION
+        // =====================================================
+
+        AdminUser updatedUser =
+                adminPermissionService
+                        .addPermission(
+                                userId,
+                                permissionId
+                        );
+
+        return ResponseEntity.ok(
+                new AdminUserResponse(
+                        updatedUser
+                )
+        );
+
+    } catch (
+            AdminPermissionDeniedException e) {
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(e.getMessage());
+
+    } catch (
+            IllegalArgumentException e) {
+
+        return ResponseEntity
+                .badRequest()
+                .body(e.getMessage());
+
+    } catch (
+            IllegalStateException e) {
+
+        return ResponseEntity
+                .badRequest()
+                .body(e.getMessage());
+
+    } catch (Exception e) {
+
+        e.printStackTrace();
+
+        return ResponseEntity
+                .status(
+                        HttpStatus.INTERNAL_SERVER_ERROR
+                )
+                .body(
+                        "Unable to add user permission."
                 );
     }
 }

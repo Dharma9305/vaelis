@@ -470,7 +470,104 @@ public class AdminApprovalService {
                 employee
         );
     }
+        // =========================================================
+    // DELETED USERS
+    // =========================================================
 
+    @Transactional(readOnly = true)
+    public List<AdminUser> getDeletedUsers() {
+
+        return adminUserRepository
+                .findByDeletedTrueOrderByUpdatedAtDesc();
+    }
+
+    // =========================================================
+    // DELETED EMPLOYEES
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public List<AdminUser> getDeletedEmployees() {
+
+        return adminUserRepository
+                .findByRoleIgnoreCaseAndDeletedTrueOrderByUpdatedAtDesc(
+                        "EMPLOYEE"
+                );
+    }
+
+    // =========================================================
+    // DELETED ADMINS
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public List<AdminUser> getDeletedAdmins() {
+
+        return adminUserRepository
+                .findByRoleIgnoreCaseAndDeletedTrueOrderByUpdatedAtDesc(
+                        "ADMIN"
+                );
+    }
+
+    // =========================================================
+    // DELETED ACCOUNT MANAGERS
+    // =========================================================
+
+    @Transactional(readOnly = true)
+    public List<AdminUser> getDeletedAccountManagers() {
+
+        return adminUserRepository
+                .findByRoleIgnoreCaseAndDeletedTrueOrderByUpdatedAtDesc(
+                        "ACCOUNT_MANAGER"
+                );
+    }
+
+    // =========================================================
+    // RESTORE DELETED USER
+    // =========================================================
+    //
+    // IMPORTANT:
+    // Restoring does NOT automatically enable the account.
+    //
+    // deleted  -> false
+    // enabled  -> false
+    //
+    // SUPER_ADMIN must explicitly enable the account afterward.
+    // =========================================================
+
+    @Transactional
+    public AdminUser restoreDeletedUser(
+            Long userId) {
+
+        AdminUser user =
+                findAccount(
+                        userId,
+                        "User account not found."
+                );
+
+        if (!user.isDeleted()) {
+
+            throw new IllegalStateException(
+                    "User account is not deleted."
+            );
+        }
+
+        if ("SUPER_ADMIN".equalsIgnoreCase(
+                user.getRole()
+        )) {
+
+            throw new IllegalStateException(
+                    "SUPER_ADMIN accounts cannot be restored through deleted-user management."
+            );
+        }
+
+        user.setDeleted(false);
+
+        // Restored accounts remain disabled.
+        user.setEnabled(false);
+
+        return adminUserRepository.save(
+                user
+        );
+    }
     // =========================================================
     // COMMON: FIND ACCOUNT
     // =========================================================
