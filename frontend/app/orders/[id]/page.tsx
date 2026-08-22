@@ -1,4 +1,5 @@
 "use client";
+
 import API_BASE_URL from "@/lib/api";
 import { useEffect, useState } from "react";
 import {
@@ -10,6 +11,7 @@ import {
 import { useParams, useRouter } from "next/navigation";
 
 import Header from "../../../components/layout/Header";
+import RetryPaymentButton from "../../../components/payment/RetryPaymentButton";
 
 type OrderItem = {
   id: number;
@@ -60,11 +62,15 @@ export default function OrderDetailsPage() {
   const [error, setError] =
     useState("");
 
-      const [cancelling, setCancelling] =
+  const [cancelling, setCancelling] =
     useState(false);
 
   const [cancelMessage, setCancelMessage] =
     useState("");
+
+  // =========================================================
+  // LOAD ORDER
+  // =========================================================
 
   useEffect(() => {
     if (!orderId) return;
@@ -79,10 +85,13 @@ export default function OrderDetailsPage() {
         );
 
         if (!response.ok) {
-          throw new Error("Order not found.");
+          throw new Error(
+            "Order not found.",
+          );
         }
 
-        const data = await response.json();
+        const data =
+          await response.json();
 
         setOrder(data);
       } catch (error) {
@@ -101,12 +110,11 @@ export default function OrderDetailsPage() {
     loadOrder();
   }, [orderId]);
 
-    // =========================================================
+  // =========================================================
   // CANCEL ORDER
   // =========================================================
 
   async function cancelOrder() {
-
     if (!order) {
       return;
     }
@@ -121,7 +129,7 @@ export default function OrderDetailsPage() {
 
     const confirmed =
       window.confirm(
-        "Are you sure you want to cancel this order?"
+        "Are you sure you want to cancel this order?",
       );
 
     if (!confirmed) {
@@ -129,7 +137,6 @@ export default function OrderDetailsPage() {
     }
 
     try {
-
       setCancelling(true);
       setCancelMessage("");
       setError("");
@@ -139,17 +146,16 @@ export default function OrderDetailsPage() {
           `${API_BASE_URL}/api/orders/${order.id}/cancel`,
           {
             method: "POST",
-          }
+          },
         );
 
       if (!response.ok) {
-
         const message =
           await response.text();
 
         throw new Error(
           message ||
-          "Unable to cancel order."
+            "Unable to cancel order.",
         );
       }
 
@@ -159,25 +165,21 @@ export default function OrderDetailsPage() {
       setOrder(updatedOrder);
 
       setCancelMessage(
-        "Your order has been cancelled successfully."
+        "Your order has been cancelled successfully.",
       );
-
     } catch (error) {
-
       console.error(error);
 
       setError(
         error instanceof Error
           ? error.message
-          : "Unable to cancel order."
+          : "Unable to cancel order.",
       );
-
     } finally {
-
       setCancelling(false);
-
     }
   }
+
   // =========================================================
   // LOADING
   // =========================================================
@@ -197,7 +199,7 @@ export default function OrderDetailsPage() {
   }
 
   // =========================================================
-  // ERROR
+  // ERROR / NOT FOUND
   // =========================================================
 
   if (error || !order) {
@@ -207,7 +209,6 @@ export default function OrderDetailsPage() {
 
         <section className="mx-auto flex min-h-[60vh] max-w-5xl items-center justify-center px-6">
           <div className="text-center">
-
             <h1 className="text-2xl">
               Order Not Found
             </h1>
@@ -225,7 +226,6 @@ export default function OrderDetailsPage() {
             >
               Back to Orders
             </button>
-
           </div>
         </section>
       </main>
@@ -237,7 +237,9 @@ export default function OrderDetailsPage() {
   // =========================================================
 
   const orderDate =
-    new Date(order.createdAt).toLocaleDateString(
+    new Date(
+      order.createdAt,
+    ).toLocaleDateString(
       "en-IN",
       {
         day: "2-digit",
@@ -254,11 +256,14 @@ export default function OrderDetailsPage() {
     order.expectedDeliveryDate
       ? new Date(
           order.expectedDeliveryDate,
-        ).toLocaleDateString("en-IN", {
-          day: "2-digit",
-          month: "long",
-          year: "numeric",
-        })
+        ).toLocaleDateString(
+          "en-IN",
+          {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          },
+        )
       : null;
 
   // =========================================================
@@ -267,7 +272,6 @@ export default function OrderDetailsPage() {
 
   return (
     <main className="min-h-screen bg-[#050505] text-white">
-
       <Header />
 
       <section className="mx-auto max-w-6xl px-6 py-16">
@@ -294,7 +298,6 @@ export default function OrderDetailsPage() {
         <div className="mt-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
 
           <div>
-
             <p className="text-xs uppercase tracking-[0.25em] text-white/40">
               Order Details
             </p>
@@ -306,22 +309,58 @@ export default function OrderDetailsPage() {
             <p className="mt-3 text-sm text-white/40">
               {orderDate}
             </p>
-
           </div>
 
           <div className="flex flex-wrap gap-3">
-
             <span className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/60">
               {order.orderStatus}
             </span>
 
             <span className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/60">
-              Payment: {order.paymentStatus}
+              Payment:{" "}
+              {order.paymentStatus}
             </span>
-
           </div>
 
         </div>
+
+        {/* =================================================
+            RETRY PAYMENT
+        ================================================= */}
+
+        {order.paymentStatus ===
+          "PENDING" &&
+          order.orderStatus ===
+            "PLACED" && (
+
+          <div className="mt-8 rounded-[30px] border border-white/10 bg-white/[0.03] p-8">
+
+            <p className="text-xs uppercase tracking-[0.25em] text-white/40">
+              Payment
+            </p>
+
+            <h2 className="mt-2 text-xl font-medium">
+              Complete Your Payment
+            </h2>
+
+            <p className="mt-2 max-w-xl text-sm text-white/40">
+              Your order has been created but
+              payment has not been completed yet.
+              You can safely retry the payment
+              using the same order.
+            </p>
+
+            <div className="mt-5">
+              <RetryPaymentButton
+                orderId={order.id}
+                onSuccess={() => {
+                  window.location.reload();
+                }}
+              />
+            </div>
+
+          </div>
+        )}
 
         {/* =================================================
             MAIN GRID
@@ -336,7 +375,6 @@ export default function OrderDetailsPage() {
           <div className="rounded-[30px] border border-white/10 bg-white/[0.03] p-8">
 
             <div className="flex items-center gap-3">
-
               <Package
                 size={20}
                 className="text-white/50"
@@ -345,12 +383,12 @@ export default function OrderDetailsPage() {
               <h2 className="text-xl font-medium">
                 Items
               </h2>
-
             </div>
 
             <div className="mt-8 space-y-6">
 
-              {order.items.map((item) => (
+              {order.items.map(
+                (item) => (
 
                 <div
                   key={item.id}
@@ -386,9 +424,7 @@ export default function OrderDetailsPage() {
                   </p>
 
                 </div>
-
               ))}
-
             </div>
 
           </div>
@@ -406,7 +442,6 @@ export default function OrderDetailsPage() {
             <div className="mt-8 space-y-4 text-sm">
 
               <div className="flex justify-between text-white/50">
-
                 <span>
                   Subtotal
                 </span>
@@ -417,27 +452,24 @@ export default function OrderDetailsPage() {
                     "en-IN",
                   )}
                 </span>
-
               </div>
 
               <div className="flex justify-between text-white/50">
-
                 <span>
                   Delivery
                 </span>
 
                 <span>
-                  {order.deliveryCharge === 0
+                  {order.deliveryCharge ===
+                  0
                     ? "FREE"
                     : `₹${order.deliveryCharge.toLocaleString(
                         "en-IN",
                       )}`}
                 </span>
-
               </div>
 
               <div className="flex justify-between border-t border-white/10 pt-5 text-lg">
-
                 <span>
                   Total
                 </span>
@@ -448,7 +480,6 @@ export default function OrderDetailsPage() {
                     "en-IN",
                   )}
                 </span>
-
               </div>
 
             </div>
@@ -494,7 +525,6 @@ export default function OrderDetailsPage() {
             <div className="mt-6 grid gap-6 text-sm sm:grid-cols-2 lg:grid-cols-4">
 
               <div>
-
                 <p className="text-xs text-white/40">
                   Name
                 </p>
@@ -502,11 +532,9 @@ export default function OrderDetailsPage() {
                 <p className="mt-2">
                   {order.customerName}
                 </p>
-
               </div>
 
               <div>
-
                 <p className="text-xs text-white/40">
                   Email
                 </p>
@@ -514,11 +542,9 @@ export default function OrderDetailsPage() {
                 <p className="mt-2 break-all">
                   {order.email}
                 </p>
-
               </div>
 
               <div>
-
                 <p className="text-xs text-white/40">
                   Phone
                 </p>
@@ -526,11 +552,9 @@ export default function OrderDetailsPage() {
                 <p className="mt-2">
                   {order.phone}
                 </p>
-
               </div>
 
               <div>
-
                 <p className="text-xs text-white/40">
                   Pincode
                 </p>
@@ -538,7 +562,6 @@ export default function OrderDetailsPage() {
                 <p className="mt-2">
                   {order.pincode}
                 </p>
-
               </div>
 
               <div className="sm:col-span-2 lg:col-span-4">
@@ -588,17 +611,13 @@ export default function OrderDetailsPage() {
               <span className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/60">
                 SHIPPED
               </span>
-
             )}
 
           </div>
 
           <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
 
-            {/* SHIPPING PARTNER */}
-
             <div>
-
               <p className="text-xs text-white/40">
                 Shipping Partner
               </p>
@@ -607,13 +626,9 @@ export default function OrderDetailsPage() {
                 {order.shippingPartner ||
                   "Not assigned yet"}
               </p>
-
             </div>
 
-            {/* TRACKING NUMBER */}
-
             <div>
-
               <p className="text-xs text-white/40">
                 Tracking Number
               </p>
@@ -622,13 +637,9 @@ export default function OrderDetailsPage() {
                 {order.trackingNumber ||
                   "Not available yet"}
               </p>
-
             </div>
 
-            {/* EXPECTED DELIVERY */}
-
             <div>
-
               <p className="text-xs text-white/40">
                 Expected Delivery
               </p>
@@ -637,17 +648,16 @@ export default function OrderDetailsPage() {
                 {expectedDelivery ||
                   "Not available yet"}
               </p>
-
             </div>
-
-            {/* TRACK BUTTON */}
 
             <div className="flex items-end">
 
               {order.trackingUrl ? (
 
                 <a
-                  href={order.trackingUrl}
+                  href={
+                    order.trackingUrl
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-medium text-black transition hover:bg-white/90"
@@ -665,7 +675,6 @@ export default function OrderDetailsPage() {
                   Tracking link will appear
                   after shipment.
                 </span>
-
               )}
 
             </div>
@@ -673,14 +682,18 @@ export default function OrderDetailsPage() {
           </div>
 
         </div>
-    {/* =================================================
+
+        {/* =================================================
             CANCEL ORDER
         ================================================= */}
 
         {(
-          order.orderStatus === "PLACED" ||
-          order.orderStatus === "CONFIRMED" ||
-          order.orderStatus === "PROCESSING"
+          order.orderStatus ===
+            "PLACED" ||
+          order.orderStatus ===
+            "CONFIRMED" ||
+          order.orderStatus ===
+            "PROCESSING"
         ) && (
 
           <div className="mt-8 rounded-[30px] border border-red-500/20 bg-red-500/[0.03] p-8">
@@ -690,15 +703,14 @@ export default function OrderDetailsPage() {
             </h2>
 
             <p className="mt-2 text-sm text-white/40">
-              You can cancel this order before it is shipped.
+              You can cancel this order before
+              it is shipped.
             </p>
 
             {cancelMessage && (
-
               <p className="mt-4 text-sm text-green-400">
                 {cancelMessage}
               </p>
-
             )}
 
             <button
@@ -713,8 +725,9 @@ export default function OrderDetailsPage() {
             </button>
 
           </div>
+        )}
 
-        )}        {/* =================================================
+        {/* =================================================
             CONTINUE SHOPPING
         ================================================= */}
 
@@ -728,7 +741,6 @@ export default function OrderDetailsPage() {
         </button>
 
       </section>
-
     </main>
   );
 }

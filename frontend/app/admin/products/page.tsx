@@ -1,10 +1,17 @@
-"use client";
+﻿"use client";
+
 import API_BASE_URL from "@/lib/api";
+
 import { useEffect, useState } from "react";
+
 import {
   getAdminCredentials,
   clearAdminCredentials,
+  getAdminProfile,
+  hasAdminPermission,
+  type AdminProfile,
 } from "@/lib/adminAuth";
+
 import {
   Plus,
   Search,
@@ -46,7 +53,15 @@ type Product = {
   badge: string | null;
   rating: number | null;
   reviewCount: number | null;
+
+  // =========================
+  // INVENTORY
+  // =========================
+
   inStock: boolean;
+  stockQuantity: number;
+  lowStockThreshold: number;
+
   colors: string[];
   features: string[];
   specifications: ProductSpecification[];
@@ -66,7 +81,15 @@ const emptyProduct: Product = {
   badge: "",
   rating: null,
   reviewCount: null,
-  inStock: true,
+
+  // =========================
+  // INVENTORY
+  // =========================
+
+  inStock: false,
+  stockQuantity: 0,
+  lowStockThreshold: 5,
+
   colors: [],
   features: [],
   specifications: [],
@@ -122,16 +145,68 @@ export default function AdminProductsPage() {
   const [uploadStatus, setUploadStatus] =
     useState("");
 
+    const [adminProfile, setAdminProfile] =
+    useState<AdminProfile | null>(null);
+
+  const [permissionsLoading, setPermissionsLoading] =
+    useState(true);
+
   // =========================
   // FORMAT AMOUNT
   // =========================
 
-  function formatAmount(
-    amount: number
-  ) {
-    return `₹${amount.toLocaleString(
-      "en-IN"
-    )}`;
+  function formatAmount(amount: number) {
+    return `â‚¹${amount.toLocaleString("en-IN")}`;
+  }
+
+  // =========================
+  // INVENTORY HELPERS
+  // =========================
+
+  function getStockQuantity(
+    product: Product
+  ): number {
+    return Number.isFinite(
+      product.stockQuantity
+    )
+      ? product.stockQuantity
+      : product.inStock
+        ? 1
+        : 0;
+  }
+
+  function getLowStockThreshold(
+    product: Product
+  ): number {
+    return Number.isFinite(
+      product.lowStockThreshold
+    )
+      ? product.lowStockThreshold
+      : 5;
+  }
+
+  function getInventoryStatus(
+    product: Product
+  ):
+    | "OUT_OF_STOCK"
+    | "LOW_STOCK"
+    | "AVAILABLE" {
+
+    const quantity =
+      getStockQuantity(product);
+
+    const threshold =
+      getLowStockThreshold(product);
+
+    if (quantity <= 0) {
+      return "OUT_OF_STOCK";
+    }
+
+    if (quantity <= threshold) {
+      return "LOW_STOCK";
+    }
+
+    return "AVAILABLE";
   }
 
   // =========================
@@ -166,6 +241,35 @@ export default function AdminProductsPage() {
           (product: Product) => ({
             ...product,
 
+            inStock:
+              product.inStock ??
+              Number(product.stockQuantity) >
+                0,
+
+            stockQuantity:
+              Number.isFinite(
+                Number(
+                  product.stockQuantity
+                )
+              )
+                ? Number(
+                    product.stockQuantity
+                  )
+                : product.inStock
+                  ? 1
+                  : 0,
+
+            lowStockThreshold:
+              Number.isFinite(
+                Number(
+                  product.lowStockThreshold
+                )
+              )
+                ? Number(
+                    product.lowStockThreshold
+                  )
+                : 5,
+
             colors:
               product.colors || [],
 
@@ -180,7 +284,6 @@ export default function AdminProductsPage() {
           })
         )
       );
-
     } catch (error) {
       console.error(error);
 
@@ -189,7 +292,6 @@ export default function AdminProductsPage() {
           ? error.message
           : "Unable to fetch products."
       );
-
     } finally {
       setLoading(false);
     }
@@ -199,10 +301,80 @@ export default function AdminProductsPage() {
   // LOAD
   // =========================
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  // =========================================================
+  // LOAD ADMIN PERMISSIONS
+  // =========================================================
 
+  async function loadAdminPermissions() {
+
+    try {
+
+      setPermissionsLoading(true);
+
+      const profile =
+        await getAdminProfile();
+
+      setAdminProfile(profile);
+
+    } catch (error) {
+
+      console.error(
+        "Unable to load admin permissions:",
+        error
+      );
+
+      setAdminProfile(null);
+
+    } finally {
+
+      setPermissionsLoading(false);
+
+    }
+  }
+
+  useEffect(() => {
+    loadAdminPermissions();
+}, []);
+
+useEffect(() => {
+  if (!permissionsLoading) {
+    fetchProducts();
+  }
+}, [permissionsLoading]);
+  const canViewProducts =
+    hasAdminPermission(
+      adminProfile,
+      "PRODUCTS_VIEW"
+    );
+
+  const canManageProducts =
+    hasAdminPermission(
+      adminProfile,
+      "PRODUCTS_MANAGE"
+    );
+      if (
+    !permissionsLoading &&
+    !canViewProducts
+  ) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#050505] px-6 text-white">
+        <div className="max-w-md rounded-3xl border border-white/10 bg-white/[0.03] p-8 text-center">
+          <XCircle
+            size={42}
+            className="mx-auto text-red-400"
+          />
+
+          <h1 className="mt-5 text-xl font-medium">
+            Access Denied
+          </h1>
+
+          <p className="mt-2 text-sm text-white/40">
+            You do not have permission to view products.
+          </p>
+        </div>
+      </main>
+    );
+  }
   // =========================
   // SEARCH
   // =========================
@@ -260,6 +432,7 @@ export default function AdminProductsPage() {
     setNewSpecValue("");
     setNewImageUrl("");
     setNewImageAlt("");
+    setUploadStatus("");
 
     setShowForm(true);
   }
@@ -275,6 +448,16 @@ export default function AdminProductsPage() {
 
     setForm({
       ...product,
+
+      inStock:
+        product.inStock ??
+        getStockQuantity(product) > 0,
+
+      stockQuantity:
+        getStockQuantity(product),
+
+      lowStockThreshold:
+        getLowStockThreshold(product),
 
       colors:
         product.colors || [],
@@ -295,6 +478,7 @@ export default function AdminProductsPage() {
     setNewSpecValue("");
     setNewImageUrl("");
     setNewImageAlt("");
+    setUploadStatus("");
 
     setShowForm(true);
   }
@@ -310,6 +494,7 @@ export default function AdminProductsPage() {
 
     setShowForm(false);
     setEditingProduct(null);
+    setUploadStatus("");
   }
 
   // =========================
@@ -446,20 +631,20 @@ export default function AdminProductsPage() {
   // ADD SPECIFICATION
   // =========================
 
-    function addSpecification() {
-  const label =
-    newSpecLabel.trim();
+  function addSpecification() {
+    const label =
+      newSpecLabel.trim();
 
-  const value =
-    newSpecValue.trim();
+    const value =
+      newSpecValue.trim();
 
-  if (!label || !value) {
-    return;
-  }
+    if (!label || !value) {
+      return;
+    }
 
-  if (label.length > 100) {
-    return;
-  }
+    if (label.length > 100) {
+      return;
+    }
 
     setForm(
       (previous) => ({
@@ -545,74 +730,146 @@ export default function AdminProductsPage() {
   async function uploadImages(
     event: React.ChangeEvent<HTMLInputElement>
   ) {
-    const files = event.target.files;
+    const files =
+      event.target.files;
 
-    if (!files || files.length === 0) {
+    if (
+      !files ||
+      files.length === 0
+    ) {
       return;
     }
 
     const cloudName =
-      process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+      process.env
+        .NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
 
     const uploadPreset =
-      process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+      process.env
+        .NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
-    if (!cloudName || !uploadPreset) {
+    if (
+      !cloudName ||
+      !uploadPreset
+    ) {
       setError(
         "Cloudinary is not configured. Check NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET in .env.local."
       );
+
       event.target.value = "";
+
       return;
     }
 
     try {
       setUploadingImages(true);
       setError("");
-      setUploadStatus(`Preparing ${files.length} image${files.length === 1 ? "" : "s"}...`);
 
-      const uploadedImages: ProductImage[] = [];
+      setUploadStatus(
+        `Preparing ${files.length} image${
+          files.length === 1
+            ? ""
+            : "s"
+        }...`
+      );
 
-      for (const file of Array.from(files)) {
-        setUploadStatus(`Uploading ${file.name}...`);
+      const uploadedImages:
+        ProductImage[] = [];
 
-        if (!file.type.startsWith("image/")) {
+      for (
+        const file of Array.from(
+          files
+        )
+      ) {
+        setUploadStatus(
+          `Uploading ${file.name}...`
+        );
+
+        if (
+          !file.type.startsWith(
+            "image/"
+          )
+        ) {
           throw new Error(
             `${file.name} is not an image file.`
           );
         }
 
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("upload_preset", uploadPreset);
-        formData.append("folder", "vaelis/products");
+        const formData =
+          new FormData();
 
-        const uploadUrl =
-          `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/image/upload`;
-
-        console.log("Cloudinary upload URL:", uploadUrl);
-        console.log("Cloudinary upload preset:", uploadPreset);
-        console.log("Uploading file:", file.name, file.type, file.size);
-
-        const response = await fetch(
-          uploadUrl,
-          {
-            method: "POST",
-            body: formData,
-          }
+        formData.append(
+          "file",
+          file
         );
 
-        const rawResponse = await response.text();
+        formData.append(
+          "upload_preset",
+          uploadPreset
+        );
+
+        formData.append(
+          "folder",
+          "vaelis/products"
+        );
+
+        const uploadUrl =
+          `https://api.cloudinary.com/v1_1/${encodeURIComponent(
+            cloudName
+          )}/image/upload`;
+
+        console.log(
+          "Cloudinary upload URL:",
+          uploadUrl
+        );
+
+        console.log(
+          "Cloudinary upload preset:",
+          uploadPreset
+        );
+
+        console.log(
+          "Uploading file:",
+          file.name,
+          file.type,
+          file.size
+        );
+
+        const response =
+          await fetch(
+            uploadUrl,
+            {
+              method: "POST",
+              body: formData,
+            }
+          );
+
+        const rawResponse =
+          await response.text();
+
         let data: any = {};
 
         try {
-          data = JSON.parse(rawResponse);
+          data =
+            JSON.parse(
+              rawResponse
+            );
         } catch {
-          data = { raw: rawResponse };
+          data = {
+            raw: rawResponse,
+          };
         }
 
-        console.log("Cloudinary response:", response.status, data);
+        console.log(
+          "Cloudinary response:",
+          response.status,
+          data
+        );
 
-        if (!response.ok || !data.secure_url) {
+        if (
+          !response.ok ||
+          !data.secure_url
+        ) {
           throw new Error(
             data?.error?.message ||
               data?.raw ||
@@ -621,34 +878,60 @@ export default function AdminProductsPage() {
         }
 
         uploadedImages.push({
-          imageUrl: data.secure_url,
-          altText: file.name.replace(/\.[^/.]+$/, ""),
-          sortOrder: form.images.length + uploadedImages.length,
+          imageUrl:
+            data.secure_url,
+
+          altText:
+            file.name.replace(
+              /\.[^/.]+$/,
+              ""
+            ),
+
+          sortOrder:
+            form.images.length +
+            uploadedImages.length,
+
           primaryImage:
-            form.images.length === 0 &&
-            uploadedImages.length === 0,
+            form.images.length ===
+              0 &&
+            uploadedImages.length ===
+              0,
         });
       }
 
-      setForm((previous) => ({
-        ...previous,
-        images: [
-          ...previous.images,
-          ...uploadedImages,
-        ],
-      }));
+      setForm(
+        (previous) => ({
+          ...previous,
+
+          images: [
+            ...previous.images,
+            ...uploadedImages,
+          ],
+        })
+      );
 
       setUploadStatus(
-        `${uploadedImages.length} image${uploadedImages.length === 1 ? "" : "s"} uploaded successfully.`
+        `${uploadedImages.length} image${
+          uploadedImages.length ===
+          1
+            ? ""
+            : "s"
+        } uploaded successfully.`
       );
     } catch (error) {
-      console.error("Cloudinary upload error:", error);
+      console.error(
+        "Cloudinary upload error:",
+        error
+      );
+
       const message =
         error instanceof Error
           ? error.message
           : "Unable to upload image(s).";
+
       setError(message);
       setUploadStatus("");
+
       window.alert(message);
     } finally {
       setUploadingImages(false);
@@ -665,7 +948,6 @@ export default function AdminProductsPage() {
   ) {
     setForm(
       (previous) => {
-
         const images =
           previous.images.filter(
             (_, itemIndex) =>
@@ -709,11 +991,15 @@ export default function AdminProductsPage() {
 
         images:
           previous.images.map(
-            (image, imageIndex) => ({
+            (
+              image,
+              imageIndex
+            ) => ({
               ...image,
 
               primaryImage:
-                imageIndex === index,
+                imageIndex ===
+                index,
             })
           ),
       })
@@ -733,7 +1019,6 @@ export default function AdminProductsPage() {
 
     setForm(
       (previous) => {
-
         const images =
           [...previous.images];
 
@@ -782,7 +1067,6 @@ export default function AdminProductsPage() {
 
     setForm(
       (previous) => {
-
         const images =
           [...previous.images];
 
@@ -823,6 +1107,12 @@ export default function AdminProductsPage() {
     event: React.FormEvent
   ) {
     event.preventDefault();
+        if (!canManageProducts) {
+      setError(
+        "You do not have permission to manage products."
+      );
+      return;
+    }
 
     try {
       setSaving(true);
@@ -830,15 +1120,34 @@ export default function AdminProductsPage() {
 
       const credentials =
         getAdminCredentials();
+      
 
       if (!credentials) {
         return;
       }
 
+      // Keep inventory consistent
+      // with stock quantity.
+      const normalizedQuantity =
+        Math.max(
+          0,
+          Number(
+            form.stockQuantity
+          ) || 0
+        );
+
+      const normalizedThreshold =
+        Math.max(
+          0,
+          Number(
+            form.lowStockThreshold
+          ) || 0
+        );
+
       const url =
         editingProduct
           ? `${API_BASE_URL}/api/products/admin/${editingProduct.id}`
-          :`${API_BASE_URL}/api/products/admin`;
+          : `${API_BASE_URL}/api/products/admin`;
 
       const method =
         editingProduct
@@ -847,6 +1156,15 @@ export default function AdminProductsPage() {
 
       const payload: Product = {
         ...form,
+
+        stockQuantity:
+          normalizedQuantity,
+
+        lowStockThreshold:
+          normalizedThreshold,
+
+        inStock:
+          normalizedQuantity > 0,
 
         images:
           form.images.map(
@@ -881,8 +1199,11 @@ export default function AdminProductsPage() {
           }
         );
 
-      if (response.status === 401) {
-       clearAdminCredentials();
+      if (
+        response.status ===
+        401
+      ) {
+        clearAdminCredentials();
 
         window.location.href =
           "/admin/login";
@@ -902,15 +1223,15 @@ export default function AdminProductsPage() {
       if (!response.ok) {
         throw new Error(
           data?.error ||
-          "Unable to save product."
+            "Unable to save product."
         );
       }
 
       setShowForm(false);
       setEditingProduct(null);
+      setUploadStatus("");
 
       await fetchProducts();
-
     } catch (error) {
       console.error(error);
 
@@ -919,7 +1240,6 @@ export default function AdminProductsPage() {
           ? error.message
           : "Unable to save product."
       );
-
     } finally {
       setSaving(false);
     }
@@ -932,6 +1252,13 @@ export default function AdminProductsPage() {
   async function toggleStock(
     product: Product
   ) {
+     if (!canManageProducts) {
+    setError(
+      "You do not have permission to manage product stock."
+    );
+    return;
+  }
+
     try {
       setError("");
 
@@ -941,6 +1268,9 @@ export default function AdminProductsPage() {
       if (!credentials) {
         return;
       }
+
+      const nextInStock =
+        !product.inStock;
 
       const response =
         await fetch(
@@ -958,15 +1288,16 @@ export default function AdminProductsPage() {
 
             body: JSON.stringify({
               inStock:
-                !product.inStock,
+                nextInStock,
             }),
           }
         );
 
-      if (response.status === 401) {
-        localStorage.removeItem(
-          "vaelis_admin_auth"
-        );
+      if (
+        response.status ===
+        401
+      ) {
+        clearAdminCredentials();
 
         window.location.href =
           "/admin/login";
@@ -986,12 +1317,11 @@ export default function AdminProductsPage() {
       if (!response.ok) {
         throw new Error(
           data?.error ||
-          "Unable to update stock."
+            "Unable to update stock."
         );
       }
 
       await fetchProducts();
-
     } catch (error) {
       console.error(error);
 
@@ -1010,6 +1340,12 @@ export default function AdminProductsPage() {
   async function deleteProduct(
     product: Product
   ) {
+        if (!canManageProducts) {
+      setError(
+        "You do not have permission to manage products."
+      );
+      return;
+    }
     const confirmed =
       window.confirm(
         `Delete "${product.name}"?`
@@ -1042,10 +1378,11 @@ export default function AdminProductsPage() {
           }
         );
 
-      if (response.status === 401) {
-        localStorage.removeItem(
-          "vaelis_admin_auth"
-        );
+      if (
+        response.status ===
+        401
+      ) {
+        clearAdminCredentials();
 
         window.location.href =
           "/admin/login";
@@ -1072,7 +1409,6 @@ export default function AdminProductsPage() {
       }
 
       await fetchProducts();
-
     } catch (error) {
       console.error(error);
 
@@ -1131,19 +1467,15 @@ export default function AdminProductsPage() {
               Refresh
 
             </button>
-
-            <button
-              onClick={
-                openAddProduct
-              }
-              className="flex items-center gap-2 rounded-full bg-[#c9a227] px-5 py-2 text-sm font-medium text-black transition hover:bg-[#d8b43b]"
-            >
-
-              <Plus size={17} />
-
-              Add Product
-
-            </button>
+            {canManageProducts && (
+              <button
+                onClick={openAddProduct}
+                className="flex items-center gap-2 rounded-full bg-[#c9a227] px-5 py-2 text-sm font-medium text-black transition hover:bg-[#d8b43b]"
+              >
+                <Plus size={17} />
+                Add Product
+              </button>
+            )}
 
           </div>
 
@@ -1191,7 +1523,9 @@ export default function AdminProductsPage() {
 
         {/* SUMMARY */}
 
-        <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+          {/* TOTAL */}
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
 
@@ -1205,6 +1539,8 @@ export default function AdminProductsPage() {
 
           </div>
 
+          {/* AVAILABLE */}
+
           <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
 
             <p className="text-sm text-white/40">
@@ -1215,12 +1551,39 @@ export default function AdminProductsPage() {
               {
                 products.filter(
                   (product) =>
-                    product.inStock
+                    getInventoryStatus(
+                      product
+                    ) ===
+                    "AVAILABLE"
                 ).length
               }
             </p>
 
           </div>
+
+          {/* LOW STOCK */}
+
+          <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+
+            <p className="text-sm text-white/40">
+              Low Stock
+            </p>
+
+            <p className="mt-3 text-2xl font-medium text-yellow-400">
+              {
+                products.filter(
+                  (product) =>
+                    getInventoryStatus(
+                      product
+                    ) ===
+                    "LOW_STOCK"
+                ).length
+              }
+            </p>
+
+          </div>
+
+          {/* OUT OF STOCK */}
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
 
@@ -1232,7 +1595,10 @@ export default function AdminProductsPage() {
               {
                 products.filter(
                   (product) =>
-                    !product.inStock
+                    getInventoryStatus(
+                      product
+                    ) ===
+                    "OUT_OF_STOCK"
                 ).length
               }
             </p>
@@ -1255,7 +1621,8 @@ export default function AdminProductsPage() {
 
               <p className="mt-1 text-sm text-white/30">
                 {filteredProducts.length} product
-                {filteredProducts.length === 1
+                {filteredProducts.length ===
+                1
                   ? ""
                   : "s"}
               </p>
@@ -1275,7 +1642,8 @@ export default function AdminProductsPage() {
               Loading products...
             </div>
 
-          ) : filteredProducts.length === 0 ? (
+          ) : filteredProducts.length ===
+            0 ? (
 
             <div className="p-12 text-center">
 
@@ -1317,7 +1685,11 @@ export default function AdminProductsPage() {
                     </th>
 
                     <th className="px-5 py-4">
-                      Stock
+                      Quantity
+                    </th>
+
+                    <th className="px-5 py-4">
+                      Threshold
                     </th>
 
                     <th className="px-5 py-4">
@@ -1335,207 +1707,253 @@ export default function AdminProductsPage() {
                 <tbody className="divide-y divide-white/10">
 
                   {filteredProducts.map(
-                    (product) => (
+                    (product) => {
 
-                      <tr
-                        key={product.id}
-                        className="transition hover:bg-white/[0.02]"
-                      >
+                      const inventoryStatus =
+                        getInventoryStatus(
+                          product
+                        );
 
-                        <td className="px-5 py-5">
+                      return (
 
-                          <p className="font-medium">
-                            {product.name}
-                          </p>
+                        <tr
+                          key={
+                            product.id
+                          }
+                          className="transition hover:bg-white/[0.02]"
+                        >
 
-                          <p className="mt-1 text-xs text-white/30">
-                            {product.id}
-                          </p>
+                          {/* PRODUCT */}
 
-                        </td>
+                          <td className="px-5 py-5">
 
-                        <td className="px-5 py-5">
+                            <p className="font-medium">
+                              {
+                                product.name
+                              }
+                            </p>
 
-                          <div className="flex items-center gap-2">
+                            <p className="mt-1 text-xs text-white/30">
+                              {
+                                product.id
+                              }
+                            </p>
 
-                            {product.images &&
-                            product.images.length >
-                              0 ? (
+                          </td>
 
-                              <>
+                          {/* IMAGES */}
 
-                                <div className="h-12 w-12 overflow-hidden rounded-xl border border-white/10 bg-black">
+                          <td className="px-5 py-5">
 
-                                  <img
-                                    src={
-                                      product.images.find(
-                                        (image) =>
-                                          image.primaryImage
-                                      )?.imageUrl ||
-                                      product.images[0]
-                                        .imageUrl
+                            <div className="flex items-center gap-2">
+
+                              {product.images &&
+                              product.images.length >
+                                0 ? (
+
+                                <>
+
+                                  <div className="h-12 w-12 overflow-hidden rounded-xl border border-white/10 bg-black">
+
+                                    <img
+                                      src={
+                                        product.images.find(
+                                          (
+                                            image
+                                          ) =>
+                                            image.primaryImage
+                                        )?.imageUrl ||
+                                        product
+                                          .images[0]
+                                          .imageUrl
+                                      }
+                                      alt={
+                                        product.name
+                                      }
+                                      className="h-full w-full object-cover"
+                                    />
+
+                                  </div>
+
+                                  <span className="text-xs text-white/40">
+                                    {
+                                      product
+                                        .images
+                                        .length
                                     }
-                                    alt={
-                                      product.name
-                                    }
-                                    className="h-full w-full object-cover"
-                                  />
+                                  </span>
 
-                                </div>
+                                </>
 
-                                <span className="text-xs text-white/40">
-                                  {
-                                    product
-                                      .images
-                                      .length
-                                  }
+                              ) : (
+
+                                <span className="text-xs text-white/25">
+                                  No images
                                 </span>
 
-                              </>
+                              )}
+
+                            </div>
+
+                          </td>
+
+                          {/* CATEGORY */}
+
+                          <td className="px-5 py-5 text-sm text-white/60">
+                            {
+                              product.category
+                            }
+                          </td>
+
+                          {/* PRICE */}
+
+                          <td className="px-5 py-5">
+
+                            <div className="flex items-center gap-1">
+
+                              <IndianRupee
+                                size={14}
+                                className="text-[#c9a227]"
+                              />
+
+                              <span>
+                                {product.price.toLocaleString(
+                                  "en-IN"
+                                )}
+                              </span>
+
+                            </div>
+
+                            {product.originalPrice &&
+                            product.originalPrice >
+                              product.price && (
+
+                              <p className="mt-1 text-xs text-white/30 line-through">
+                                {formatAmount(
+                                  product.originalPrice
+                                )}
+                              </p>
+
+                            )}
+
+                          </td>
+
+                          {/* QUANTITY */}
+
+                          <td className="px-5 py-5">
+
+                            <p className="text-sm font-medium">
+                              {
+                                getStockQuantity(
+                                  product
+                                )
+                              }
+                            </p>
+
+                            <p className="mt-1 text-xs text-white/30">
+                              units
+                            </p>
+
+                          </td>
+
+                          {/* THRESHOLD */}
+
+                          <td className="px-5 py-5">
+
+                            <span className="text-sm text-white/50">
+                              {
+                                getLowStockThreshold(
+                                  product
+                                )
+                              }
+                            </span>
+
+                          </td>
+
+                          {/* STATUS */}
+
+                          <td className="px-5 py-5">
+
+                            {inventoryStatus ===
+                              "OUT_OF_STOCK" ? (
+
+                              <span className="flex w-fit items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1 text-xs text-red-400">
+
+                                <XCircle
+                                  size={13}
+                                />
+
+                                Out of Stock
+
+                              </span>
+
+                            ) : inventoryStatus ===
+                              "LOW_STOCK" ? (
+
+                              <span className="flex w-fit items-center gap-1.5 rounded-full bg-yellow-500/10 px-3 py-1 text-xs text-yellow-400">
+
+                                <Package
+                                  size={13}
+                                />
+
+                                Low Stock
+
+                              </span>
 
                             ) : (
 
-                              <span className="text-xs text-white/25">
-                                No images
+                              <span className="flex w-fit items-center gap-1.5 rounded-full bg-green-500/10 px-3 py-1 text-xs text-green-400">
+
+                                <CheckCircle2
+                                  size={13}
+                                />
+
+                                Available
+
                               </span>
 
                             )}
 
-                          </div>
+                          </td>
 
-                        </td>
+                          {/* ACTIONS */}
 
-                        <td className="px-5 py-5 text-sm text-white/60">
-                          {product.category}
-                        </td>
+                          <td className="px-5 py-5">
 
-                        <td className="px-5 py-5">
+                           <div className="flex justify-end gap-2">
 
-                          <div className="flex items-center gap-1">
+  {canManageProducts && (
+    <>
+      <button
+        onClick={() =>
+          openEditProduct(product)
+        }
+        className="rounded-xl border border-white/10 p-2 text-white/50 transition hover:bg-white/5 hover:text-white"
+        title="Edit product"
+      >
+        <Pencil size={16} />
+      </button>
 
-                            <IndianRupee
-                              size={14}
-                              className="text-[#c9a227]"
-                            />
+      <button
+        onClick={() =>
+          deleteProduct(product)
+        }
+        className="rounded-xl border border-red-500/10 p-2 text-red-400/60 transition hover:bg-red-500/10 hover:text-red-400"
+        title="Delete product"
+      >
+        <Trash2 size={16} />
+      </button>
+    </>
+  )}
 
-                            <span>
-                              {product.price.toLocaleString(
-                                "en-IN"
-                              )}
-                            </span>
+</div>
 
-                          </div>
+                          </td>
 
-                          {product.originalPrice &&
-                            product.originalPrice >
-                              product.price && (
+                        </tr>
 
-                            <p className="mt-1 text-xs text-white/30 line-through">
-                              {formatAmount(
-                                product.originalPrice
-                              )}
-                            </p>
-
-                          )}
-
-                        </td>
-
-                        <td className="px-5 py-5">
-
-                          <button
-                            onClick={() =>
-                              toggleStock(
-                                product
-                              )
-                            }
-                            className={`rounded-full px-3 py-1 text-xs transition ${
-                              product.inStock
-                                ? "bg-green-500/10 text-green-400 hover:bg-green-500/20"
-                                : "bg-red-500/10 text-red-400 hover:bg-red-500/20"
-                            }`}
-                          >
-
-                            {product.inStock
-                              ? "In Stock"
-                              : "Out of Stock"}
-
-                          </button>
-
-                        </td>
-
-                        <td className="px-5 py-5">
-
-                          {product.inStock ? (
-
-                            <span className="flex w-fit items-center gap-1.5 rounded-full bg-green-500/10 px-3 py-1 text-xs text-green-400">
-
-                              <CheckCircle2
-                                size={13}
-                              />
-
-                              Available
-
-                            </span>
-
-                          ) : (
-
-                            <span className="flex w-fit items-center gap-1.5 rounded-full bg-red-500/10 px-3 py-1 text-xs text-red-400">
-
-                              <XCircle
-                                size={13}
-                              />
-
-                              Out of Stock
-
-                            </span>
-
-                          )}
-
-                        </td>
-
-                        <td className="px-5 py-5">
-
-                          <div className="flex justify-end gap-2">
-
-                            <button
-                              onClick={() =>
-                                openEditProduct(
-                                  product
-                                )
-                              }
-                              className="rounded-xl border border-white/10 p-2 text-white/50 transition hover:bg-white/5 hover:text-white"
-                              title="Edit product"
-                            >
-
-                              <Pencil
-                                size={16}
-                              />
-
-                            </button>
-
-                            <button
-                              onClick={() =>
-                                deleteProduct(
-                                  product
-                                )
-                              }
-                              className="rounded-xl border border-red-500/10 p-2 text-red-400/60 transition hover:bg-red-500/10 hover:text-red-400"
-                              title="Delete product"
-                            >
-
-                              <Trash2
-                                size={16}
-                              />
-
-                            </button>
-
-                          </div>
-
-                        </td>
-
-                      </tr>
-
-                    )
+                      );
+                    }
                   )}
 
                 </tbody>
@@ -1552,7 +1970,7 @@ export default function AdminProductsPage() {
 
       {/* PRODUCT FORM MODAL */}
 
-      {showForm && (
+      {showForm && canManageProducts && (
 
         <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 px-4 py-8 backdrop-blur-sm">
 
@@ -1607,6 +2025,8 @@ export default function AdminProductsPage() {
 
                 <div className="grid gap-5 sm:grid-cols-2">
 
+                  {/* PRODUCT ID */}
+
                   <div>
 
                     <label className="mb-2 block text-sm text-white/50">
@@ -1614,7 +2034,9 @@ export default function AdminProductsPage() {
                     </label>
 
                     <input
-                      value={form.id}
+                      value={
+                        form.id
+                      }
                       onChange={(e) =>
                         updateField(
                           "id",
@@ -1632,6 +2054,8 @@ export default function AdminProductsPage() {
                     />
 
                   </div>
+
+                  {/* SLUG */}
 
                   <div>
 
@@ -1656,6 +2080,8 @@ export default function AdminProductsPage() {
 
                   </div>
 
+                  {/* NAME */}
+
                   <div>
 
                     <label className="mb-2 block text-sm text-white/50">
@@ -1679,6 +2105,8 @@ export default function AdminProductsPage() {
 
                   </div>
 
+                  {/* CATEGORY */}
+
                   <div>
 
                     <label className="mb-2 block text-sm text-white/50">
@@ -1701,6 +2129,8 @@ export default function AdminProductsPage() {
                     />
 
                   </div>
+
+                  {/* PRICE */}
 
                   <div>
 
@@ -1728,6 +2158,8 @@ export default function AdminProductsPage() {
                     />
 
                   </div>
+
+                  {/* ORIGINAL PRICE */}
 
                   <div>
 
@@ -1759,6 +2191,8 @@ export default function AdminProductsPage() {
 
                   </div>
 
+                  {/* CURRENCY */}
+
                   <div>
 
                     <label className="mb-2 block text-sm text-white/50">
@@ -1780,6 +2214,8 @@ export default function AdminProductsPage() {
 
                   </div>
 
+                  {/* BADGE */}
+
                   <div>
 
                     <label className="mb-2 block text-sm text-white/50">
@@ -1798,10 +2234,12 @@ export default function AdminProductsPage() {
                         )
                       }
                       placeholder="NEW"
-                      className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm outline-none focus:border-white/30"
+                      className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm outline-none placeholder:text-white/20 focus:border-white/30"
                     />
 
                   </div>
+
+                  {/* RATING */}
 
                   <div>
 
@@ -1843,6 +2281,8 @@ export default function AdminProductsPage() {
                     </div>
 
                   </div>
+
+                  {/* REVIEW COUNT */}
 
                   <div>
 
@@ -1973,25 +2413,41 @@ export default function AdminProductsPage() {
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
                     <div>
+
                       <p className="text-sm font-medium text-white/80">
                         Upload from your computer
                       </p>
+
                       <p className="mt-1 text-xs text-white/30">
                         JPG, PNG, WEBP and other image formats are uploaded to Cloudinary.
                       </p>
+
                     </div>
 
                     <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-[#c9a227] px-5 py-3 text-sm font-medium text-black transition hover:bg-[#d8b43b] has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
-                      <ImageIcon size={16} className="mr-2" />
-                      {uploadingImages ? "Uploading..." : "Choose Images"}
+
+                      <ImageIcon
+                        size={16}
+                        className="mr-2"
+                      />
+
+                      {uploadingImages
+                        ? "Uploading..."
+                        : "Choose Images"}
+
                       <input
                         type="file"
                         accept="image/*"
                         multiple
-                        onChange={uploadImages}
-                        disabled={uploadingImages}
+                        onChange={
+                          uploadImages
+                        }
+                        disabled={
+                          uploadingImages
+                        }
                         className="hidden"
                       />
+
                     </label>
 
                   </div>
@@ -2013,12 +2469,19 @@ export default function AdminProductsPage() {
                 <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr_auto]">
 
                   <input
-                    value={newImageUrl}
+                    value={
+                      newImageUrl
+                    }
                     onChange={(e) =>
-                      setNewImageUrl(e.target.value)
+                      setNewImageUrl(
+                        e.target.value
+                      )
                     }
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
+                      if (
+                        e.key ===
+                        "Enter"
+                      ) {
                         e.preventDefault();
                         addImage();
                       }
@@ -2028,9 +2491,13 @@ export default function AdminProductsPage() {
                   />
 
                   <input
-                    value={newImageAlt}
+                    value={
+                      newImageAlt
+                    }
                     onChange={(e) =>
-                      setNewImageAlt(e.target.value)
+                      setNewImageAlt(
+                        e.target.value
+                      )
                     }
                     placeholder="Alt text"
                     className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm outline-none placeholder:text-white/20 focus:border-white/30"
@@ -2038,11 +2505,19 @@ export default function AdminProductsPage() {
 
                   <button
                     type="button"
-                    onClick={addImage}
+                    onClick={
+                      addImage
+                    }
                     className="rounded-xl border border-white/10 px-5 py-3 text-sm text-white/70 transition hover:bg-white/5 hover:text-white"
                   >
-                    <Plus size={16} className="mr-2 inline" />
+
+                    <Plus
+                      size={16}
+                      className="mr-2 inline"
+                    />
+
                     Add URL
+
                   </button>
 
                 </div>
@@ -2050,7 +2525,7 @@ export default function AdminProductsPage() {
                 {/* IMAGE LIST */}
 
                 {form.images.length >
-                  0 ? (
+                0 ? (
 
                   <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
@@ -2117,7 +2592,9 @@ export default function AdminProductsPage() {
                             </p>
 
                             <p className="mt-1 truncate text-[11px] text-white/20">
-                              {image.imageUrl}
+                              {
+                                image.imageUrl
+                              }
                             </p>
 
                             {/* CONTROLS */}
@@ -2135,11 +2612,14 @@ export default function AdminProductsPage() {
                                   }
                                   className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/60 transition hover:bg-white/5 hover:text-white"
                                 >
+
                                   <Star
                                     size={13}
                                     className="mr-1 inline"
                                   />
+
                                   Primary
+
                                 </button>
 
                               )}
@@ -2157,7 +2637,7 @@ export default function AdminProductsPage() {
                                 }
                                 className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/50 disabled:opacity-20"
                               >
-                                ↑
+                                â†‘
                               </button>
 
                               <button
@@ -2176,7 +2656,7 @@ export default function AdminProductsPage() {
                                 }
                                 className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/50 disabled:opacity-20"
                               >
-                                ↓
+                                â†“
                               </button>
 
                               <button
@@ -2188,11 +2668,14 @@ export default function AdminProductsPage() {
                                 }
                                 className="rounded-lg border border-red-500/10 px-3 py-2 text-xs text-red-400/70 transition hover:bg-red-500/10 hover:text-red-400"
                               >
+
                                 <Trash2
                                   size={13}
                                   className="mr-1 inline"
                                 />
+
                                 Delete
+
                               </button>
 
                             </div>
@@ -2264,11 +2747,14 @@ export default function AdminProductsPage() {
                     }
                     className="rounded-xl border border-white/10 px-5 py-3 text-sm text-white/70 hover:bg-white/5"
                   >
+
                     <Plus
                       size={16}
                       className="mr-2 inline"
                     />
+
                     Add Color
+
                   </button>
 
                 </div>
@@ -2300,9 +2786,11 @@ export default function AdminProductsPage() {
                             }
                             className="text-white/30 hover:text-red-400"
                           >
+
                             <X
                               size={14}
                             />
+
                           </button>
 
                         </div>
@@ -2355,11 +2843,14 @@ export default function AdminProductsPage() {
                     }
                     className="rounded-xl border border-white/10 px-5 py-3 text-sm text-white/70 hover:bg-white/5"
                   >
+
                     <Plus
                       size={16}
                       className="mr-2 inline"
                     />
+
                     Add Feature
+
                   </button>
 
                 </div>
@@ -2381,7 +2872,9 @@ export default function AdminProductsPage() {
                         >
 
                           <span className="text-sm text-white/70">
-                            {feature}
+                            {
+                              feature
+                            }
                           </span>
 
                           <button
@@ -2393,9 +2886,11 @@ export default function AdminProductsPage() {
                             }
                             className="text-white/30 hover:text-red-400"
                           >
+
                             <X
                               size={16}
                             />
+
                           </button>
 
                         </div>
@@ -2419,15 +2914,19 @@ export default function AdminProductsPage() {
 
                 <div className="grid gap-3 sm:grid-cols-[1fr_1.5fr_auto]">
 
-                 <input
-  value={newSpecLabel}
-  onChange={(e) =>
-    setNewSpecLabel(e.target.value)
-  }
-  maxLength={100}
-  placeholder="Label (max 100 characters)"
-  className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm outline-none placeholder:text-white/20 focus:border-white/30"
-/>
+                  <input
+                    value={
+                      newSpecLabel
+                    }
+                    onChange={(e) =>
+                      setNewSpecLabel(
+                        e.target.value
+                      )
+                    }
+                    maxLength={100}
+                    placeholder="Label (max 100 characters)"
+                    className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm outline-none placeholder:text-white/20 focus:border-white/30"
+                  />
 
                   <input
                     value={
@@ -2458,11 +2957,14 @@ export default function AdminProductsPage() {
                     }
                     className="rounded-xl border border-white/10 px-5 py-3 text-sm text-white/70 hover:bg-white/5"
                   >
+
                     <Plus
                       size={16}
                       className="mr-2 inline"
                     />
+
                     Add
+
                   </button>
 
                 </div>
@@ -2508,9 +3010,11 @@ export default function AdminProductsPage() {
                             }
                             className="text-white/30 hover:text-red-400"
                           >
+
                             <X
                               size={16}
                             />
+
                           </button>
 
                         </div>
@@ -2528,31 +3032,141 @@ export default function AdminProductsPage() {
 
               <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
 
-                <h3 className="mb-4 text-sm font-medium uppercase tracking-wider text-white/50">
-                  Inventory
-                </h3>
+                <div className="mb-5">
 
-                <label className="flex cursor-pointer items-center gap-3">
+                  <h3 className="text-sm font-medium uppercase tracking-wider text-white/50">
+                    Inventory
+                  </h3>
 
-                  <input
-                    type="checkbox"
-                    checked={
-                      form.inStock
-                    }
-                    onChange={(e) =>
-                      updateField(
-                        "inStock",
-                        e.target.checked
-                      )
-                    }
-                    className="h-4 w-4"
-                  />
+                  <p className="mt-1 text-xs text-white/30">
+                    Manage available quantity and low-stock warning level.
+                  </p>
 
-                  <span className="text-sm text-white/70">
-                    Product is currently in stock
-                  </span>
+                </div>
 
-                </label>
+                <div className="grid gap-5 sm:grid-cols-2">
+
+                  {/* STOCK QUANTITY */}
+
+                  <div>
+
+                    <label className="mb-2 block text-sm text-white/50">
+                      Stock Quantity
+                    </label>
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={
+                        form.stockQuantity
+                      }
+                      onChange={(e) =>
+                        updateField(
+                          "stockQuantity",
+                          Math.max(
+                            0,
+                            Number(
+                              e.target.value
+                            ) || 0
+                          )
+                        )
+                      }
+                      className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm outline-none focus:border-white/30"
+                    />
+
+                    <p className="mt-2 text-xs text-white/25">
+                      Set to 0 when the product is unavailable.
+                    </p>
+
+                  </div>
+
+                  {/* LOW STOCK THRESHOLD */}
+
+                  <div>
+
+                    <label className="mb-2 block text-sm text-white/50">
+                      Low Stock Threshold
+                    </label>
+
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={
+                        form.lowStockThreshold
+                      }
+                      onChange={(e) =>
+                        updateField(
+                          "lowStockThreshold",
+                          Math.max(
+                            0,
+                            Number(
+                              e.target.value
+                            ) || 0
+                          )
+                        )
+                      }
+                      className="w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm outline-none focus:border-white/30"
+                    />
+
+                    <p className="mt-2 text-xs text-white/25">
+                      Warning appears when quantity reaches this level.
+                    </p>
+
+                  </div>
+
+                </div>
+
+                {/* INVENTORY STATUS */}
+
+                <div className="mt-5 rounded-2xl border border-white/10 bg-black/40 p-4">
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+                    <div>
+
+                      <p className="text-xs uppercase tracking-wider text-white/30">
+                        Current Inventory Status
+                      </p>
+
+                      <p className="mt-1 text-sm text-white/70">
+                        {form.stockQuantity <=
+                        0
+                          ? "Out of Stock"
+                          : form.stockQuantity <=
+                              form.lowStockThreshold
+                            ? "Low Stock"
+                            : "In Stock"}
+                      </p>
+
+                    </div>
+
+                    <span
+                      className={`w-fit rounded-full px-3 py-1.5 text-xs ${
+                        form.stockQuantity <=
+                        0
+                          ? "bg-red-500/10 text-red-400"
+                          : form.stockQuantity <=
+                              form.lowStockThreshold
+                            ? "bg-yellow-500/10 text-yellow-400"
+                            : "bg-green-500/10 text-green-400"
+                      }`}
+                    >
+
+                      {form.stockQuantity <=
+                      0
+                        ? "OUT OF STOCK"
+                        : form.stockQuantity <=
+                            form.lowStockThreshold
+                          ? "LOW STOCK"
+                          : "AVAILABLE"}
+
+                    </span>
+
+                  </div>
+
+                </div>
 
               </section>
 
@@ -2573,7 +3187,10 @@ export default function AdminProductsPage() {
 
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={
+                    saving ||
+                    uploadingImages
+                  }
                   className="rounded-xl bg-[#c9a227] px-6 py-3 text-sm font-medium text-black hover:bg-[#d8b43b] disabled:opacity-50"
                 >
 
@@ -2598,3 +3215,7 @@ export default function AdminProductsPage() {
     </main>
   );
 }
+
+
+
+

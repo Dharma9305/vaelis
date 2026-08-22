@@ -1,4 +1,5 @@
 "use client";
+
 import API_BASE_URL from "@/lib/api";
 import { motion } from "framer-motion";
 import {
@@ -30,6 +31,14 @@ type ProductImage = {
 
 type ApiProduct = Product & {
   images?: ProductImage[];
+
+  // =========================
+  // INVENTORY
+  // =========================
+
+  inStock?: boolean;
+  stockQuantity?: number;
+  lowStockThreshold?: number;
 };
 
 export default function ProductDetailPage() {
@@ -146,6 +155,23 @@ export default function ProductDetailPage() {
           setSelectedImage("");
         }
 
+        // =========================
+        // INITIAL QUANTITY
+        // =========================
+
+        const availableStock =
+          Number(
+            productData.stockQuantity ?? 0
+          );
+
+        if (
+          availableStock > 0
+        ) {
+          setQuantity(1);
+        } else {
+          setQuantity(1);
+        }
+
       } catch (error) {
         console.error(
           "Product loading error:",
@@ -168,9 +194,116 @@ export default function ProductDetailPage() {
     }
   }, [slug]);
 
-  // =========================
+  // =========================================================
+  // LIVE STOCK REFRESH
+  // =========================================================
+  //
+  // Refreshes the current product every 10 seconds.
+  //
+  // The backend remains the final source of truth.
+  // =========================================================
+
+  useEffect(() => {
+    if (
+      !slug ||
+      !product
+    ) {
+      return;
+    }
+
+    const refreshStock =
+      async () => {
+        try {
+          const response =
+            await fetch(
+              `${API_BASE_URL}/api/products/${slug}`,
+              {
+                cache: "no-store",
+              }
+            );
+
+          if (!response.ok) {
+            return;
+          }
+
+          const latestProduct: ApiProduct =
+            await response.json();
+
+          const latestStock =
+            Math.max(
+              0,
+              Number(
+                latestProduct.stockQuantity ?? 0
+              )
+            );
+
+          setProduct(
+            (currentProduct) => {
+
+              if (!currentProduct) {
+                return latestProduct;
+              }
+
+              return {
+                ...currentProduct,
+                stockQuantity:
+                  latestStock,
+                inStock:
+                  latestStock > 0,
+                lowStockThreshold:
+                  latestProduct.lowStockThreshold ??
+                  currentProduct.lowStockThreshold ??
+                  5,
+              };
+            }
+          );
+
+          // -------------------------------------------------
+          // PREVENT CUSTOMER QUANTITY FROM EXCEEDING STOCK
+          // -------------------------------------------------
+
+          setQuantity(
+            (currentQuantity) => {
+
+              if (
+                latestStock <= 0
+              ) {
+                return 1;
+              }
+
+              return Math.min(
+                currentQuantity,
+                latestStock
+              );
+            }
+          );
+
+        } catch (error) {
+
+          console.error(
+            "Live stock refresh failed:",
+            error
+          );
+        }
+      };
+
+    const interval =
+      window.setInterval(
+        refreshStock,
+        10000
+      );
+
+    return () => {
+      window.clearInterval(
+        interval
+      );
+    };
+
+  }, [slug, product]);
+
+  // =========================================================
   // LOADING
-  // =========================
+  // =========================================================
 
   if (loading) {
     return (
@@ -182,11 +315,14 @@ export default function ProductDetailPage() {
     );
   }
 
-  // =========================
+  // =========================================================
   // ERROR
-  // =========================
+  // =========================================================
 
-  if (error || !product) {
+  if (
+    error ||
+    !product
+  ) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#050505] px-6 text-white">
         <div className="text-center">
@@ -213,9 +349,40 @@ export default function ProductDetailPage() {
     );
   }
 
-  // =========================
+  // =========================================================
+  // CURRENT INVENTORY
+  // =========================================================
+
+  const stockQuantity =
+    Math.max(
+      0,
+      Number(
+        product.stockQuantity ?? 0
+      )
+    );
+
+  const lowStockThreshold =
+    Math.max(
+      0,
+      Number(
+        product.lowStockThreshold ?? 5
+      )
+    );
+
+  const isOutOfStock =
+    stockQuantity <= 0;
+
+  const isLowStock =
+    !isOutOfStock &&
+    stockQuantity <=
+      lowStockThreshold;
+
+  const isAvailable =
+    stockQuantity > 0;
+
+  // =========================================================
   // PRODUCT IMAGES
-  // =========================
+  // =========================================================
 
   const productImages =
     product.images ?? [];
@@ -232,18 +399,29 @@ export default function ProductDetailPage() {
     productImages[0]?.imageUrl ||
     "";
 
-  // =========================
+  // =========================================================
   // QUANTITY
-  // =========================
+  // =========================================================
 
   const increaseQuantity = () => {
+
+    if (
+      isOutOfStock
+    ) {
+      return;
+    }
+
     setQuantity(
       (current) =>
-        current + 1
+        Math.min(
+          stockQuantity,
+          current + 1
+        )
     );
   };
 
   const decreaseQuantity = () => {
+
     setQuantity(
       (current) =>
         Math.max(
@@ -253,11 +431,36 @@ export default function ProductDetailPage() {
     );
   };
 
-  // =========================
+  // =========================================================
   // ADD TO CART
-  // =========================
+  // =========================================================
 
   const handleAddToCart = () => {
+
+    if (
+      isOutOfStock
+    ) {
+      return;
+    }
+
+    if (
+      quantity >
+      stockQuantity
+    ) {
+      alert(
+        `Only ${stockQuantity} unit${
+          stockQuantity === 1
+            ? ""
+            : "s"
+        } available.`
+      );
+
+      setQuantity(
+        stockQuantity
+      );
+
+      return;
+    }
 
     addToCart(
       product,
@@ -265,10 +468,14 @@ export default function ProductDetailPage() {
       selectedColor
     );
 
-    setShowAddedMessage(true);
+    setShowAddedMessage(
+      true
+    );
 
     setTimeout(() => {
-      setShowAddedMessage(false);
+      setShowAddedMessage(
+        false
+      );
     }, 3000);
 
     console.log(
@@ -283,11 +490,36 @@ export default function ProductDetailPage() {
     );
   };
 
-  // =========================
+  // =========================================================
   // BUY NOW
-  // =========================
+  // =========================================================
 
   const handleBuyNow = () => {
+
+    if (
+      isOutOfStock
+    ) {
+      return;
+    }
+
+    if (
+      quantity >
+      stockQuantity
+    ) {
+      alert(
+        `Only ${stockQuantity} unit${
+          stockQuantity === 1
+            ? ""
+            : "s"
+        } available.`
+      );
+
+      setQuantity(
+        stockQuantity
+      );
+
+      return;
+    }
 
     console.log(
       "Buy now:",
@@ -305,14 +537,16 @@ export default function ProductDetailPage() {
     );
   };
 
-  // =========================
+  // =========================================================
   // MAIN PAGE
-  // =========================
+  // =========================================================
 
   return (
     <main className="min-h-screen bg-[#050505] text-white">
 
-      {/* ADDED TO CART */}
+      {/* =====================================================
+          ADDED TO CART
+          ===================================================== */}
 
       {showAddedMessage && (
         <motion.div
@@ -359,11 +593,15 @@ export default function ProductDetailPage() {
         </motion.div>
       )}
 
-      {/* HEADER */}
+      {/* =====================================================
+          HEADER
+          ===================================================== */}
 
       <Header />
 
-      {/* BREADCRUMB */}
+      {/* =====================================================
+          BREADCRUMB
+          ===================================================== */}
 
       <div className="mx-auto max-w-7xl px-6 pt-8 lg:px-8">
 
@@ -377,15 +615,17 @@ export default function ProductDetailPage() {
 
       </div>
 
-      {/* PRODUCT HERO */}
+      {/* =====================================================
+          PRODUCT HERO
+          ===================================================== */}
 
       <section className="mx-auto max-w-7xl px-6 py-12 lg:px-8 lg:py-20">
 
         <div className="grid gap-14 lg:grid-cols-2 lg:gap-20">
 
-          {/* =========================
+          {/* =================================================
               PRODUCT IMAGE
-              ========================= */}
+              ================================================= */}
 
           <motion.div
             initial={{
@@ -414,6 +654,14 @@ export default function ProductDetailPage() {
                 </div>
               )}
 
+              {/* OUT OF STOCK IMAGE LABEL */}
+
+              {isOutOfStock && (
+                <div className="absolute right-7 top-7 z-20 rounded-full border border-red-400/20 bg-red-950/70 px-4 py-2 text-[10px] font-medium tracking-[0.2em] text-red-300 backdrop-blur">
+                  OUT OF STOCK
+                </div>
+              )}
+
               {/* REAL PRODUCT IMAGE */}
 
               {currentImage ? (
@@ -424,7 +672,12 @@ export default function ProductDetailPage() {
                     primaryImage?.altText ||
                     product.name
                   }
-                  className="relative z-10 h-[520px] w-full object-contain p-10"                />
+                  className={`relative z-10 h-[520px] w-full object-contain p-10 transition duration-500 ${
+                    isOutOfStock
+                      ? "opacity-50 grayscale"
+                      : ""
+                  }`}
+                />
 
               ) : (
 
@@ -534,9 +787,9 @@ export default function ProductDetailPage() {
 
           </motion.div>
 
-          {/* =========================
+          {/* =================================================
               PRODUCT INFORMATION
-              ========================= */}
+              ================================================= */}
 
           <motion.div
             initial={{
@@ -566,7 +819,9 @@ export default function ProductDetailPage() {
               {product.shortDescription}
             </p>
 
-            {/* RATING */}
+            {/* =================================================
+                RATING
+                ================================================= */}
 
             <div className="mt-7 flex items-center gap-3">
 
@@ -613,7 +868,9 @@ export default function ProductDetailPage() {
 
             </div>
 
-            {/* PRICE */}
+            {/* =================================================
+                PRICE
+                ================================================= */}
 
             <div className="mt-8 border-y border-white/10 py-7">
 
@@ -649,13 +906,91 @@ export default function ProductDetailPage() {
 
             </div>
 
-            {/* DESCRIPTION */}
+            {/* =================================================
+                INVENTORY STATUS
+                ================================================= */}
+
+            <div className="mt-7">
+
+              {isOutOfStock ? (
+
+                <div className="rounded-2xl border border-red-400/20 bg-red-950/20 px-5 py-4">
+
+                  <div className="flex items-center gap-3">
+
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
+
+                    <p className="text-sm font-medium text-red-300">
+                      Out of Stock
+                    </p>
+
+                  </div>
+
+                  <p className="mt-1 text-xs text-red-200/50">
+                    This product is currently unavailable.
+                  </p>
+
+                </div>
+
+              ) : isLowStock ? (
+
+                <div className="rounded-2xl border border-yellow-400/20 bg-yellow-950/20 px-5 py-4">
+
+                  <div className="flex items-center gap-3">
+
+                    <span className="h-2.5 w-2.5 rounded-full bg-yellow-400" />
+
+                    <p className="text-sm font-medium text-yellow-300">
+                      Only {stockQuantity}{" "}
+                      {stockQuantity === 1
+                        ? "left"
+                        : "left"}{" "}
+                      in stock
+                    </p>
+
+                  </div>
+
+                  <p className="mt-1 text-xs text-yellow-200/50">
+                    Order soon before it sells out.
+                  </p>
+
+                </div>
+
+              ) : (
+
+                <div className="flex items-center gap-3">
+
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+
+                  <p className="text-sm text-emerald-300">
+                    In Stock
+                  </p>
+
+                  <span className="text-xs text-white/30">
+                    {stockQuantity}{" "}
+                    {stockQuantity === 1
+                      ? "unit"
+                      : "units"}{" "}
+                    available
+                  </span>
+
+                </div>
+
+              )}
+
+            </div>
+
+            {/* =================================================
+                DESCRIPTION
+                ================================================= */}
 
             <p className="mt-7 text-sm leading-7 text-white/50">
               {product.description}
             </p>
 
-            {/* COLORS */}
+            {/* =================================================
+                COLORS
+                ================================================= */}
 
             {product.colors?.length > 0 && (
 
@@ -704,17 +1039,24 @@ export default function ProductDetailPage() {
 
             )}
 
-            {/* QUANTITY + WISHLIST */}
+            {/* =================================================
+                QUANTITY + WISHLIST
+                ================================================= */}
 
             <div className="mt-8 flex gap-3">
 
               <div className="flex items-center rounded-full border border-white/10">
 
                 <button
+                  type="button"
                   onClick={
                     decreaseQuantity
                   }
-                  className="p-3 text-white/50 transition hover:text-white"
+                  disabled={
+                    isOutOfStock ||
+                    quantity <= 1
+                  }
+                  className="p-3 text-white/50 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <Minus size={15} />
                 </button>
@@ -724,10 +1066,16 @@ export default function ProductDetailPage() {
                 </span>
 
                 <button
+                  type="button"
                   onClick={
                     increaseQuantity
                   }
-                  className="p-3 text-white/50 transition hover:text-white"
+                  disabled={
+                    isOutOfStock ||
+                    quantity >=
+                      stockQuantity
+                  }
+                  className="p-3 text-white/50 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <Plus size={15} />
                 </button>
@@ -735,6 +1083,7 @@ export default function ProductDetailPage() {
               </div>
 
               <button
+                type="button"
                 onClick={() =>
                   setAddedToWishlist(
                     !addedToWishlist
@@ -760,43 +1109,68 @@ export default function ProductDetailPage() {
 
             </div>
 
-            {/* ACTIONS */}
+            {/* QUANTITY LIMIT MESSAGE */}
+
+            {!isOutOfStock &&
+              quantity >=
+                stockQuantity && (
+
+                <p className="mt-3 text-xs text-white/35">
+                  Maximum available quantity:{" "}
+                  {stockQuantity}
+                </p>
+
+              )}
+
+            {/* =================================================
+                ACTIONS
+                ================================================= */}
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
 
               <button
+                type="button"
                 onClick={
                   handleAddToCart
                 }
                 disabled={
-                  !product.inStock
+                  isOutOfStock ||
+                  quantity >
+                    stockQuantity
                 }
                 className="flex items-center justify-center gap-3 rounded-full border border-white/20 px-6 py-4 text-sm transition hover:border-[#c9a227] hover:text-[#c9a227] disabled:cursor-not-allowed disabled:opacity-40"
               >
 
                 <ShoppingBag size={17} />
 
-                {product.inStock
-                  ? "Add to Bag"
-                  : "Coming Soon"}
+                {isOutOfStock
+                  ? "Out of Stock"
+                  : "Add to Bag"}
 
               </button>
 
               <button
+                type="button"
                 onClick={
                   handleBuyNow
                 }
                 disabled={
-                  !product.inStock
+                  isOutOfStock ||
+                  quantity >
+                    stockQuantity
                 }
                 className="rounded-full bg-white px-6 py-4 text-sm font-medium text-black transition hover:bg-[#c9a227] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Buy Now
+                {isOutOfStock
+                  ? "Out of Stock"
+                  : "Buy Now"}
               </button>
 
             </div>
 
-            {/* DELIVERY */}
+            {/* =================================================
+                DELIVERY
+                ================================================= */}
 
             <div className="mt-8 grid gap-4 border-t border-white/10 pt-7 sm:grid-cols-2">
 
@@ -849,7 +1223,9 @@ export default function ProductDetailPage() {
         </div>
       </section>
 
-      {/* FEATURES */}
+      {/* =====================================================
+          FEATURES
+          ===================================================== */}
 
       <section className="border-y border-white/10 bg-[#080808] px-6 py-28">
 
@@ -899,7 +1275,9 @@ export default function ProductDetailPage() {
 
       </section>
 
-      {/* SPECIFICATIONS */}
+      {/* =====================================================
+          SPECIFICATIONS
+          ===================================================== */}
 
       <section className="px-6 py-28">
 
@@ -956,7 +1334,9 @@ export default function ProductDetailPage() {
 
       </section>
 
-      {/* DESCRIPTION */}
+      {/* =====================================================
+          DESCRIPTION
+          ===================================================== */}
 
       <section className="border-t border-white/10 bg-[#080808] px-6 py-28">
 
@@ -978,7 +1358,9 @@ export default function ProductDetailPage() {
 
       </section>
 
-      {/* RELATED PRODUCTS */}
+      {/* =====================================================
+          RELATED PRODUCTS
+          ===================================================== */}
 
       <section className="px-6 py-28">
 
@@ -1030,6 +1412,17 @@ export default function ProductDetailPage() {
                   item.images?.[0]
                     ?.imageUrl;
 
+                const relatedStock =
+                  Math.max(
+                    0,
+                    Number(
+                      item.stockQuantity ?? 0
+                    )
+                  );
+
+                const relatedOutOfStock =
+                  relatedStock <= 0;
+
                 return (
                   <a
                     key={item.id}
@@ -1037,19 +1430,31 @@ export default function ProductDetailPage() {
                     className="group overflow-hidden rounded-[28px] border border-white/10 bg-[#0a0a0a]"
                   >
 
-                    <div className="flex h-64 items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-800 via-zinc-950 to-black">
+                    <div className="relative flex h-64 items-center justify-center overflow-hidden bg-gradient-to-br from-zinc-800 via-zinc-950 to-black">
 
                       {relatedImage ? (
 
                         <img
                           src={relatedImage}
                           alt={item.name}
-                          className="h-full w-full object-contain p-8 transition duration-500 group-hover:scale-110"
+                          className={`h-full w-full object-contain p-8 transition duration-500 group-hover:scale-110 ${
+                            relatedOutOfStock
+                              ? "opacity-40 grayscale"
+                              : ""
+                          }`}
                         />
 
                       ) : (
 
                         <div className="h-28 w-28 rounded-[30px] border border-white/10 bg-white/[0.04] shadow-2xl transition duration-500 group-hover:scale-110" />
+
+                      )}
+
+                      {relatedOutOfStock && (
+
+                        <span className="absolute right-4 top-4 rounded-full border border-red-400/20 bg-red-950/70 px-3 py-1.5 text-[9px] font-medium tracking-[0.15em] text-red-300 backdrop-blur">
+                          OUT OF STOCK
+                        </span>
 
                       )}
 
@@ -1069,12 +1474,28 @@ export default function ProductDetailPage() {
                         {item.shortDescription}
                       </p>
 
-                      <p className="mt-5 text-sm">
-                        ₹
-                        {item.price.toLocaleString(
-                          "en-IN"
-                        )}
-                      </p>
+                      <div className="mt-5 flex items-center justify-between">
+
+                        <p className="text-sm">
+                          ₹
+                          {item.price.toLocaleString(
+                            "en-IN"
+                          )}
+                        </p>
+
+                        <span
+                          className={
+                            relatedOutOfStock
+                              ? "text-[10px] uppercase tracking-wider text-red-300"
+                              : "text-[10px] uppercase tracking-wider text-emerald-300"
+                          }
+                        >
+                          {relatedOutOfStock
+                            ? "Out of Stock"
+                            : "In Stock"}
+                        </span>
+
+                      </div>
 
                     </div>
 
@@ -1088,7 +1509,9 @@ export default function ProductDetailPage() {
 
       </section>
 
-      {/* FOOTER */}
+      {/* =====================================================
+          FOOTER
+          ===================================================== */}
 
       <footer className="border-t border-white/10 px-6 py-12">
 

@@ -2,12 +2,15 @@ package vaelis_api.controller;
 
 import com.razorpay.Order;
 import com.razorpay.RazorpayClient;
-import org.json.JSONObject;
 
+import org.json.JSONObject;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import vaelis_api.config.FirebaseAuthenticationFilter.CustomerPrincipal;
+import vaelis_api.service.OrderService;
 import org.springframework.web.bind.annotation.*;
 
-import vaelis_api.service.OrderService;
 
 @RestController
 @RequestMapping("/api/payments")
@@ -29,11 +32,28 @@ public class RazorpayPaymentController {
     // CREATE RAZORPAY ORDER
     // =========================================================
 
-    @PostMapping("/create/{orderId}")
-    public ResponseEntity<?> createPaymentOrder(
-            @PathVariable Long orderId) {
+   @PostMapping("/create/{orderId}")
+public ResponseEntity<?> createPaymentOrder(
+        @PathVariable Long orderId,
+        Authentication authentication)
+        {
+                CustomerPrincipal customer =
+        getCustomerPrincipal(authentication);
+
+if (customer == null) {
+
+    return ResponseEntity
+            .status(HttpStatus.UNAUTHORIZED)
+            .body(
+                    "Customer authentication required."
+            );
+}
 
         try {
+
+            // =================================================
+            // LOAD VAELIS ORDER
+            // =================================================
 
             vaelis_api.entity.Order vaelisOrder =
                     orderService
@@ -44,12 +64,75 @@ public class RazorpayPaymentController {
                                     )
                             );
 
+                        if (!ownsOrder(
+        vaelisOrder,
+        customer
+)) {
+
+    return ResponseEntity
+            .status(HttpStatus.FORBIDDEN)
+            .body(
+                    "You are not authorized to make payment for this order."
+            );
+}
+
+            // =================================================
+            // PAYMENT STATUS VALIDATION
+            // =================================================
+
+            String paymentStatus =
+                    vaelisOrder.getPaymentStatus();
+
+            if (!"PENDING".equalsIgnoreCase(
+                    paymentStatus
+            )) {
+
+                return ResponseEntity
+                        .badRequest()
+                        .body(
+                                "This order is not available for payment. "
+                                        + "Current payment status: "
+                                        + paymentStatus
+                        );
+            }
+
+            // =================================================
+            // ORDER STATUS VALIDATION
+            // =================================================
+
+            String orderStatus =
+                    vaelisOrder.getOrderStatus();
+
+            if (!"PLACED".equalsIgnoreCase(
+                    orderStatus
+            )) {
+
+                return ResponseEntity
+                        .badRequest()
+                        .body(
+                                "This order is not available for payment. "
+                                        + "Current order status: "
+                                        + orderStatus
+                        );
+            }
+
+            // =================================================
+            // AMOUNT VALIDATION
+            // =================================================
+
             if (vaelisOrder.getTotal() == null ||
                     vaelisOrder.getTotal() <= 0) {
 
-                return ResponseEntity.badRequest()
-                        .body("Invalid order amount");
+                return ResponseEntity
+                        .badRequest()
+                        .body(
+                                "Invalid order amount"
+                        );
             }
+
+            // =================================================
+            // AMOUNT IN PAISE
+            // =================================================
 
             long amountInPaise =
                     Math.round(
@@ -57,16 +140,18 @@ public class RazorpayPaymentController {
                     );
 
             String vaelisOrderId =
-                    vaelisOrder.getId().toString();
+                    vaelisOrder
+                            .getId()
+                            .toString();
 
             String customerEmail =
                     vaelisOrder.getEmail() == null
                             ? ""
                             : vaelisOrder.getEmail();
 
-            // -------------------------------------------------
-            // Razorpay order request
-            // -------------------------------------------------
+            // =================================================
+            // RAZORPAY ORDER REQUEST
+            // =================================================
 
             JSONObject orderRequest =
                     new JSONObject();
@@ -86,6 +171,10 @@ public class RazorpayPaymentController {
                     "VAELIS-" + vaelisOrderId
             );
 
+            // =================================================
+            // RAZORPAY NOTES
+            // =================================================
+
             JSONObject notes =
                     new JSONObject();
 
@@ -104,9 +193,9 @@ public class RazorpayPaymentController {
                     notes
             );
 
-            // -------------------------------------------------
-            // Create Razorpay order
-            // -------------------------------------------------
+            // =================================================
+            // CREATE RAZORPAY ORDER
+            // =================================================
 
             Order razorpayOrder =
                     razorpayClient.orders.create(
@@ -118,9 +207,9 @@ public class RazorpayPaymentController {
                             .get("id")
                             .toString();
 
-            // -------------------------------------------------
-            // Response
-            // -------------------------------------------------
+            // =================================================
+            // RESPONSE
+            // =================================================
 
             JSONObject response =
                     new JSONObject();
@@ -149,11 +238,26 @@ public class RazorpayPaymentController {
                     response.toMap()
             );
 
+        } catch (IllegalArgumentException e) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(
+                            e.getMessage()
+                    );
+
+        } catch (RuntimeException e) {
+
+            return ResponseEntity
+                    .notFound()
+                    .build();
+
         } catch (Exception e) {
 
             e.printStackTrace();
 
-            return ResponseEntity.internalServerError()
+            return ResponseEntity
+                    .internalServerError()
                     .body(
                             "Unable to create Razorpay order: "
                                     + e.getMessage()
@@ -166,10 +270,27 @@ public class RazorpayPaymentController {
     // =========================================================
 
     @PostMapping("/verify")
-    public ResponseEntity<?> verifyPayment(
-            @RequestBody java.util.Map<String, Object> paymentData) {
+public ResponseEntity<?> verifyPayment(
+        @RequestBody java.util.Map<String, Object> paymentData,
+        Authentication authentication) {
+
+                CustomerPrincipal customer =
+        getCustomerPrincipal(authentication);
+
+if (customer == null) {
+
+    return ResponseEntity
+            .status(HttpStatus.UNAUTHORIZED)
+            .body(
+                    "Customer authentication required."
+            );
+}
 
         try {
+
+            // =================================================
+            // VAELIS ORDER ID
+            // =================================================
 
             String vaelisOrderIdText =
                     String.valueOf(
@@ -178,10 +299,50 @@ public class RazorpayPaymentController {
                             )
                     );
 
+            if ("null".equalsIgnoreCase(
+                    vaelisOrderIdText
+            ) ||
+                    vaelisOrderIdText.isBlank()) {
+
+                return ResponseEntity
+                        .badRequest()
+                        .body(
+                                "VAELIS order ID is required"
+                        );
+            }
+
             Long vaelisOrderId =
                     Long.valueOf(
                             vaelisOrderIdText
                     );
+                    // =================================================
+// VERIFY ORDER OWNERSHIP
+// =================================================
+
+vaelis_api.entity.Order vaelisOrder =
+        orderService
+                .getOrderById(vaelisOrderId)
+                .orElseThrow(() ->
+                        new RuntimeException(
+                                "Order not found"
+                        )
+                );
+
+if (!ownsOrder(
+        vaelisOrder,
+        customer
+)) {
+
+    return ResponseEntity
+            .status(HttpStatus.FORBIDDEN)
+            .body(
+                    "You are not authorized to make payment for this order."
+            );
+}
+
+            // =================================================
+            // RAZORPAY DETAILS
+            // =================================================
 
             String razorpayOrderId =
                     String.valueOf(
@@ -204,20 +365,36 @@ public class RazorpayPaymentController {
                             )
                     );
 
+            // =================================================
+            // VALIDATE PAYMENT DETAILS
+            // =================================================
+
             if (razorpayOrderId.equals("null") ||
                     razorpayPaymentId.equals("null") ||
-                    razorpaySignature.equals("null")) {
+                    razorpaySignature.equals("null") ||
+                    razorpayOrderId.isBlank() ||
+                    razorpayPaymentId.isBlank() ||
+                    razorpaySignature.isBlank()) {
 
-                return ResponseEntity.badRequest()
+                return ResponseEntity
+                        .badRequest()
                         .body(
                                 "Missing Razorpay payment details"
                         );
             }
 
+            // =================================================
+            // SIGNATURE PAYLOAD
+            // =================================================
+
             String payload =
                     razorpayOrderId
                             + "|"
                             + razorpayPaymentId;
+
+            // =================================================
+            // RAZORPAY SECRET
+            // =================================================
 
             String secret =
                     System.getenv(
@@ -227,11 +404,16 @@ public class RazorpayPaymentController {
             if (secret == null ||
                     secret.isBlank()) {
 
-                return ResponseEntity.internalServerError()
+                return ResponseEntity
+                        .internalServerError()
                         .body(
                                 "Razorpay secret is not configured"
                         );
             }
+
+            // =================================================
+            // GENERATE SIGNATURE
+            // =================================================
 
             String generatedSignature =
                     hmacSha256(
@@ -239,21 +421,45 @@ public class RazorpayPaymentController {
                             secret
                     );
 
-            if (!generatedSignature.equals(
-                    razorpaySignature)) {
+            // =================================================
+            // VERIFY SIGNATURE
+            // =================================================
 
-                return ResponseEntity.badRequest()
+            if (!generatedSignature.equals(
+                    razorpaySignature
+            )) {
+
+                return ResponseEntity
+                        .badRequest()
                         .body(
                                 "Payment signature verification failed"
                         );
             }
 
+            // =================================================
+            // MARK PAYMENT AS PAID
+            // =================================================
+            //
+            // OrderService handles:
+            //
+            // Order lock
+            // Product locks
+            // Stock validation
+            // Stock deduction
+            // Payment confirmation
+            //
+            // =================================================
+
             vaelis_api.entity.Order paidOrder =
-        orderService.markPaymentAsPaid(
-                vaelisOrderId,
-                razorpayOrderId,
-                razorpayPaymentId
-        );
+                    orderService.markPaymentAsPaid(
+                            vaelisOrderId,
+                            razorpayOrderId,
+                            razorpayPaymentId
+                    );
+
+            // =================================================
+            // RESPONSE
+            // =================================================
 
             return ResponseEntity.ok(
                     java.util.Map.of(
@@ -262,21 +468,178 @@ public class RazorpayPaymentController {
                             "vaelisOrderId",
                             paidOrder.getId(),
                             "paymentStatus",
-                            paidOrder.getPaymentStatus()
+                            paidOrder.getPaymentStatus(),
+                            "orderStatus",
+                            paidOrder.getOrderStatus()
                     )
             );
+
+        } catch (NumberFormatException e) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(
+                            "Invalid VAELIS order ID"
+                    );
+
+        } catch (IllegalArgumentException e) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(
+                            e.getMessage()
+                    );
+
+        } catch (IllegalStateException e) {
+
+            return ResponseEntity
+                    .badRequest()
+                    .body(
+                            e.getMessage()
+                    );
+
+        } catch (RuntimeException e) {
+
+            e.printStackTrace();
+
+            return ResponseEntity
+                    .notFound()
+                    .build();
 
         } catch (Exception e) {
 
             e.printStackTrace();
 
-            return ResponseEntity.internalServerError()
+            return ResponseEntity
+                    .internalServerError()
                     .body(
                             "Unable to verify payment: "
                                     + e.getMessage()
                     );
         }
     }
+        // =========================================================
+// CUSTOMER PRINCIPAL
+// =========================================================
+
+private CustomerPrincipal getCustomerPrincipal(
+        Authentication authentication) {
+
+    if (authentication == null ||
+            !authentication.isAuthenticated()) {
+
+        return null;
+    }
+
+    Object principal =
+            authentication.getPrincipal();
+
+    if (!(principal instanceof CustomerPrincipal)) {
+
+        return null;
+    }
+
+    return (CustomerPrincipal) principal;
+}
+
+// =========================================================
+// ORDER OWNERSHIP
+// =========================================================
+
+private boolean ownsOrder(
+        vaelis_api.entity.Order order,
+        CustomerPrincipal customer) {
+
+    if (order == null ||
+            customer == null) {
+
+        return false;
+    }
+
+    // =====================================================
+    // EMAIL OWNERSHIP
+    // =====================================================
+
+    String customerEmail =
+            customer.getEmail();
+
+    String orderEmail =
+            order.getEmail();
+
+    if (customerEmail != null &&
+            !customerEmail.isBlank() &&
+            orderEmail != null &&
+            !orderEmail.isBlank()) {
+
+        if (customerEmail
+                .trim()
+                .equalsIgnoreCase(
+                        orderEmail.trim()
+                )) {
+
+            return true;
+        }
+    }
+
+    // =====================================================
+    // PHONE OWNERSHIP
+    // =====================================================
+
+    String customerPhone =
+            normalizePhone(
+                    customer.getPhoneNumber()
+            );
+
+    String orderPhone =
+            normalizePhone(
+                    order.getPhone()
+            );
+
+    if (customerPhone != null &&
+            orderPhone != null &&
+            customerPhone.equals(
+                    orderPhone
+            )) {
+
+        return true;
+    }
+
+    return false;
+}
+
+// =========================================================
+// PHONE NORMALIZATION
+// =========================================================
+
+private String normalizePhone(
+        String phone) {
+
+    if (phone == null ||
+            phone.isBlank()) {
+
+        return null;
+    }
+
+    String digits =
+            phone.replaceAll(
+                    "\\D",
+                    ""
+            );
+
+    if (digits.length() > 10) {
+
+        return digits.substring(
+                digits.length() - 10
+        );
+    }
+
+    if (digits.length() == 10) {
+
+        return digits;
+    }
+
+    return null;
+}
 
     // =========================================================
     // HMAC SHA256

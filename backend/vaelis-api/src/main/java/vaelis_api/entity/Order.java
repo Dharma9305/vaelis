@@ -37,20 +37,41 @@ public class Order {
 
     private Double total;
 
+    // =========================================================
+    // PAYMENT INFORMATION
+    // =========================================================
+
     private String paymentStatus = "PENDING";
 
-    private String orderStatus = "PLACED";
+    private String paymentMethod = "ONLINE";
 
     private String razorpayOrderId;
 
     private String razorpayPaymentId;
 
+    // =========================================================
+    // ORDER STATUS
+    // =========================================================
+
+    private String orderStatus = "PLACED";
+
+    // =========================================================
+    // REFUND INFORMATION
+    // =========================================================
+
+    private String refundStatus = "NONE";
+
+    private String razorpayRefundId;
+
+    private Double refundedAmount;
+
+    private LocalDateTime refundInitiatedAt;
+
     private LocalDateTime createdAt;
 
-
-    // =========================
+    // =========================================================
     // SHIPPING INFORMATION
-    // =========================
+    // =========================================================
 
     private String shippingPartner;
 
@@ -60,15 +81,21 @@ public class Order {
 
     private LocalDate expectedDeliveryDate;
 
+    // =========================================================
+    // ORDER ITEMS
+    // =========================================================
 
     @OneToMany(
-        mappedBy = "order",
-        cascade = CascadeType.ALL,
-        orphanRemoval = true
+            mappedBy = "order",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
     )
     private List<OrderItem> items =
             new ArrayList<>();
 
+    // =========================================================
+    // CREATE DATE
+    // =========================================================
 
     @PrePersist
     protected void onCreate() {
@@ -77,11 +104,17 @@ public class Order {
                 LocalDateTime.now();
     }
 
+    // =========================================================
+    // ID
+    // =========================================================
 
     public Long getId() {
         return id;
     }
 
+    // =========================================================
+    // CUSTOMER INFORMATION
+    // =========================================================
 
     public String getCustomerName() {
         return customerName;
@@ -94,7 +127,6 @@ public class Order {
                 customerName;
     }
 
-
     public String getEmail() {
         return email;
     }
@@ -102,9 +134,9 @@ public class Order {
     public void setEmail(
             String email) {
 
-        this.email = email;
+        this.email =
+                email;
     }
-
 
     public String getPhone() {
         return phone;
@@ -113,9 +145,9 @@ public class Order {
     public void setPhone(
             String phone) {
 
-        this.phone = phone;
+        this.phone =
+                phone;
     }
-
 
     public String getAddress() {
         return address;
@@ -124,9 +156,9 @@ public class Order {
     public void setAddress(
             String address) {
 
-        this.address = address;
+        this.address =
+                address;
     }
-
 
     public String getCity() {
         return city;
@@ -135,18 +167,20 @@ public class Order {
     public void setCity(
             String city) {
 
-        this.city = city;
+        this.city =
+                city;
     }
-
 
     public String getDistrict() {
-    return district;
+        return district;
     }
 
-    public void setDistrict(String district) {
-    this.district = district;
-    }
+    public void setDistrict(
+            String district) {
 
+        this.district =
+                district;
+    }
 
     public String getState() {
         return state;
@@ -155,9 +189,9 @@ public class Order {
     public void setState(
             String state) {
 
-        this.state = state;
+        this.state =
+                state;
     }
-
 
     public String getPincode() {
         return pincode;
@@ -166,9 +200,13 @@ public class Order {
     public void setPincode(
             String pincode) {
 
-        this.pincode = pincode;
+        this.pincode =
+                pincode;
     }
 
+    // =========================================================
+    // PRICE INFORMATION
+    // =========================================================
 
     public Double getSubtotal() {
         return subtotal;
@@ -177,9 +215,9 @@ public class Order {
     public void setSubtotal(
             Double subtotal) {
 
-        this.subtotal = subtotal;
+        this.subtotal =
+                subtotal;
     }
-
 
     public Double getDeliveryCharge() {
         return deliveryCharge;
@@ -192,7 +230,6 @@ public class Order {
                 deliveryCharge;
     }
 
-
     public Double getTotal() {
         return total;
     }
@@ -200,9 +237,13 @@ public class Order {
     public void setTotal(
             Double total) {
 
-        this.total = total;
+        this.total =
+                total;
     }
 
+    // =========================================================
+    // PAYMENT STATUS
+    // =========================================================
 
     public String getPaymentStatus() {
         return paymentStatus;
@@ -215,18 +256,24 @@ public class Order {
                 paymentStatus;
     }
 
+    // =========================================================
+    // PAYMENT METHOD
+    // =========================================================
 
-    public String getOrderStatus() {
-        return orderStatus;
+    public String getPaymentMethod() {
+        return paymentMethod;
     }
 
-    public void setOrderStatus(
-            String orderStatus) {
+    public void setPaymentMethod(
+            String paymentMethod) {
 
-        this.orderStatus =
-                orderStatus;
+        this.paymentMethod =
+                paymentMethod;
     }
 
+    // =========================================================
+    // RAZORPAY ORDER ID
+    // =========================================================
 
     public String getRazorpayOrderId() {
         return razorpayOrderId;
@@ -239,6 +286,9 @@ public class Order {
                 razorpayOrderId;
     }
 
+    // =========================================================
+    // RAZORPAY PAYMENT ID
+    // =========================================================
 
     public String getRazorpayPaymentId() {
         return razorpayPaymentId;
@@ -251,15 +301,92 @@ public class Order {
                 razorpayPaymentId;
     }
 
+    // =========================================================
+    // ORDER STATUS
+    // =========================================================
+
+    public String getOrderStatus() {
+        return orderStatus;
+    }
+
+    public void setOrderStatus(
+            String orderStatus) {
+
+        this.orderStatus =
+                orderStatus;
+    }
+
+    // =========================================================
+    // REFUND STATUS
+    // =========================================================
+
+    public String getRefundStatus() {
+        return refundStatus;
+    }
+
+    public void setRefundStatus(
+            String refundStatus) {
+
+        this.refundStatus =
+                refundStatus;
+    }
+
+    // =========================================================
+    // RAZORPAY REFUND ID
+    // =========================================================
+
+    public String getRazorpayRefundId() {
+        return razorpayRefundId;
+    }
+
+    public void setRazorpayRefundId(
+            String razorpayRefundId) {
+
+        this.razorpayRefundId =
+                razorpayRefundId;
+    }
+
+    // =========================================================
+    // REFUNDED AMOUNT
+    // =========================================================
+
+    public Double getRefundedAmount() {
+        return refundedAmount;
+    }
+
+    public void setRefundedAmount(
+            Double refundedAmount) {
+
+        this.refundedAmount =
+                refundedAmount;
+    }
+
+    // =========================================================
+    // REFUND INITIATED AT
+    // =========================================================
+
+    public LocalDateTime getRefundInitiatedAt() {
+        return refundInitiatedAt;
+    }
+
+    public void setRefundInitiatedAt(
+            LocalDateTime refundInitiatedAt) {
+
+        this.refundInitiatedAt =
+                refundInitiatedAt;
+    }
+
+    // =========================================================
+    // CREATED AT
+    // =========================================================
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
 
-
-    // =========================
-    // SHIPPING GETTERS / SETTERS
-    // =========================
+    // =========================================================
+    // SHIPPING INFORMATION
+    // =========================================================
 
     public String getShippingPartner() {
         return shippingPartner;
@@ -272,7 +399,6 @@ public class Order {
                 shippingPartner;
     }
 
-
     public String getTrackingNumber() {
         return trackingNumber;
     }
@@ -283,7 +409,6 @@ public class Order {
         this.trackingNumber =
                 trackingNumber;
     }
-
 
     public String getTrackingUrl() {
         return trackingUrl;
@@ -296,7 +421,6 @@ public class Order {
                 trackingUrl;
     }
 
-
     public LocalDate getExpectedDeliveryDate() {
         return expectedDeliveryDate;
     }
@@ -308,10 +432,9 @@ public class Order {
                 expectedDeliveryDate;
     }
 
-
-    // =========================
+    // =========================================================
     // ORDER ITEMS
-    // =========================
+    // =========================================================
 
     public List<OrderItem> getItems() {
         return items;
@@ -320,9 +443,9 @@ public class Order {
     public void setItems(
             List<OrderItem> items) {
 
-        this.items = items;
+        this.items =
+                items;
     }
-
 
     public void addItem(
             OrderItem item) {

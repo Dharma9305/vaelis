@@ -1,4 +1,5 @@
 "use client";
+
 import API_BASE_URL from "@/lib/api";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -11,7 +12,11 @@ import { useParams } from "next/navigation";
 import {
   getAdminCredentials,
   clearAdminCredentials,
+  getAdminProfile,
+  hasAdminPermission,
+  type AdminProfile,
 } from "@/lib/adminAuth";
+
 type OrderItem = {
   id: number;
   productId: string;
@@ -31,19 +36,52 @@ type Order = {
   city: string;
   state: string;
   pincode: string;
+
   subtotal: number;
   deliveryCharge: number;
   total: number;
+
   paymentStatus: string;
   orderStatus: string;
-  razorpayOrderId: string;
-  razorpayPaymentId: string;
+
+  razorpayOrderId: string | null;
+  razorpayPaymentId: string | null;
+
+  refundStatus: string | null;
+  razorpayRefundId: string | null;
+  refundedAmount: number | null;
+  refundInitiatedAt: string | null;
+
   createdAt: string;
-  shippingPartner: string;
-  trackingNumber: string;
-  trackingUrl: string;
-  expectedDeliveryDate: string;
+
+  shippingPartner: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  expectedDeliveryDate: string | null;
+
   items: OrderItem[];
+};
+
+type OrderStatusAuditLog = {
+  id: number;
+  orderId: number;
+  fromStatus: string;
+  toStatus: string;
+  changedBy: string;
+  changedByRole: string;
+  changedAt: string;
+};
+
+type OrderShipmentAuditLog = {
+  id: number;
+  orderId: number;
+  shippingPartner: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  expectedDeliveryDate: string | null;
+  changedBy: string;
+  changedByRole: string;
+  changedAt: string;
 };
 
 const orderStatuses = [
@@ -53,10 +91,13 @@ const orderStatuses = [
   "SHIPPED",
   "DELIVERED",
 ];
+
 function getAvailableOrderStatuses(
   currentStatus: string
 ): string[] {
+
   switch (currentStatus) {
+
     case "PLACED":
       return [
         "PLACED",
@@ -98,6 +139,7 @@ function getAvailableOrderStatuses(
       return [currentStatus];
   }
 }
+
 export default function AdminOrderDetailsPage() {
 
   const params = useParams();
@@ -106,6 +148,53 @@ export default function AdminOrderDetailsPage() {
 
   const [order, setOrder] =
     useState<Order | null>(null);
+    // =========================================================
+  // ADMIN PERMISSIONS
+  // =========================================================
+
+  const [profile, setProfile] =
+    useState<AdminProfile | null>(null);
+
+  const canViewOrders =
+    hasAdminPermission(
+      profile,
+      "ORDERS_VIEW"
+    );
+
+  const canManageOrders =
+    hasAdminPermission(
+      profile,
+      "ORDERS_MANAGE"
+    );
+  // =========================================================
+  // STATUS HISTORY
+  // =========================================================
+
+  const [statusHistory, setStatusHistory] =
+    useState<OrderStatusAuditLog[]>([]);
+
+  const [historyLoading, setHistoryLoading] =
+    useState(false);
+
+  const [historyError, setHistoryError] =
+    useState("");
+
+  // =========================================================
+  // SHIPMENT HISTORY
+  // =========================================================
+
+  const [shipmentHistory, setShipmentHistory] =
+    useState<OrderShipmentAuditLog[]>([]);
+
+  const [shipmentHistoryLoading, setShipmentHistoryLoading] =
+    useState(false);
+
+  const [shipmentHistoryError, setShipmentHistoryError] =
+    useState("");
+
+  // =========================================================
+  // GENERAL STATES
+  // =========================================================
 
   const [loading, setLoading] =
     useState(true);
@@ -113,29 +202,37 @@ export default function AdminOrderDetailsPage() {
   const [saving, setSaving] =
     useState(false);
 
+  const [shipmentSaving, setShipmentSaving] =
+    useState(false);
+
+  const [refundSaving, setRefundSaving] =
+    useState(false);
+
   const [error, setError] =
     useState("");
 
   const [success, setSuccess] =
     useState("");
-const [shipmentSaving, setShipmentSaving] =
-  useState(false);
 
-const [shippingPartner, setShippingPartner] =
-  useState("");
+  // =========================================================
+  // SHIPMENT FORM
+  // =========================================================
 
-const [trackingNumber, setTrackingNumber] =
-  useState("");
+  const [shippingPartner, setShippingPartner] =
+    useState("");
 
-const [trackingUrl, setTrackingUrl] =
-  useState("");
+  const [trackingNumber, setTrackingNumber] =
+    useState("");
 
-const [expectedDeliveryDate, setExpectedDeliveryDate] =
-  useState("");
+  const [trackingUrl, setTrackingUrl] =
+    useState("");
 
-  // =========================
+  const [expectedDeliveryDate, setExpectedDeliveryDate] =
+    useState("");
+
+  // =========================================================
   // FETCH ORDER
-  // =========================
+  // =========================================================
 
   async function fetchOrder() {
 
@@ -143,16 +240,42 @@ const [expectedDeliveryDate, setExpectedDeliveryDate] =
 
       setLoading(true);
       setError("");
+      
+      const credentials =
+  getAdminCredentials();
 
-      const response =
-        await fetch(
-        `${API_BASE_URL}/api/orders/${id}`,
-          {
-            method: "GET",
-            cache: "no-store",
-          }
-        );
+if (!credentials) {
+  window.location.href =
+    "/admin/login";
 
+  return;
+}
+
+const response =
+  await fetch(
+    `${API_BASE_URL}/api/admin/orders/${id}`,
+    {
+      method: "GET",
+      cache: "no-store",
+
+      headers: {
+        Authorization:
+          `Basic ${credentials}`,
+        Accept:
+          "application/json",
+      },
+    }
+  );
+
+if (response.status === 401) {
+
+  clearAdminCredentials();
+
+  window.location.href =
+    "/admin/login";
+
+  return;
+}
       if (!response.ok) {
 
         throw new Error(
@@ -165,21 +288,21 @@ const [expectedDeliveryDate, setExpectedDeliveryDate] =
 
       setOrder(data);
 
-setShippingPartner(
-  data.shippingPartner || ""
-);
+      setShippingPartner(
+        data.shippingPartner || ""
+      );
 
-setTrackingNumber(
-  data.trackingNumber || ""
-);
+      setTrackingNumber(
+        data.trackingNumber || ""
+      );
 
-setTrackingUrl(
-  data.trackingUrl || ""
-);
+      setTrackingUrl(
+        data.trackingUrl || ""
+      );
 
-setExpectedDeliveryDate(
-  data.expectedDeliveryDate || ""
-);
+      setExpectedDeliveryDate(
+        data.expectedDeliveryDate || ""
+      );
 
     } catch (error) {
 
@@ -198,26 +321,240 @@ setExpectedDeliveryDate(
     }
   }
 
+  // =========================================================
+  // FETCH ORDER STATUS HISTORY
+  // =========================================================
 
-  // =========================
+  async function fetchStatusHistory() {
+
+    if (!id) {
+      return;
+    }
+
+    try {
+
+      setHistoryLoading(true);
+      setHistoryError("");
+
+      const credentials =
+        getAdminCredentials();
+
+      if (!credentials) {
+
+        window.location.href =
+          "/admin/login";
+
+        return;
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/admin/orders/${id}/status-history`,
+          {
+            method: "GET",
+            cache: "no-store",
+
+            headers: {
+              Authorization:
+                `Basic ${credentials}`,
+            },
+          }
+        );
+
+      if (response.status === 401) {
+
+        clearAdminCredentials();
+
+        window.location.href =
+          "/admin/login";
+
+        return;
+      }
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          "Unable to load order status history."
+        );
+      }
+
+      const data =
+        await response.json();
+
+      setStatusHistory(
+        Array.isArray(data)
+          ? data
+          : []
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+      setHistoryError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load order status history."
+      );
+
+    } finally {
+
+      setHistoryLoading(false);
+
+    }
+  }
+
+  // =========================================================
+  // FETCH ORDER SHIPMENT HISTORY
+  // =========================================================
+
+  async function fetchShipmentHistory() {
+
+    if (!id) {
+      return;
+    }
+
+    try {
+
+      setShipmentHistoryLoading(true);
+      setShipmentHistoryError("");
+
+      const credentials =
+        getAdminCredentials();
+
+      if (!credentials) {
+
+        window.location.href =
+          "/admin/login";
+
+        return;
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/admin/orders/${id}/shipment-history`,
+          {
+            method: "GET",
+            cache: "no-store",
+
+            headers: {
+              Authorization:
+                `Basic ${credentials}`,
+            },
+          }
+        );
+
+      if (response.status === 401) {
+
+        clearAdminCredentials();
+
+        window.location.href =
+          "/admin/login";
+
+        return;
+      }
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          "Unable to load shipment history."
+        );
+      }
+
+      const data =
+        await response.json();
+
+      setShipmentHistory(
+        Array.isArray(data)
+          ? data
+          : []
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+      setShipmentHistoryError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load shipment history."
+      );
+
+    } finally {
+
+      setShipmentHistoryLoading(false);
+
+    }
+  }
+
+  // =========================================================
   // LOAD
-  // =========================
+  // =========================================================
 
   useEffect(() => {
 
-    if (id) {
-      fetchOrder();
+  async function loadPermissionsAndOrder() {
+
+    const adminProfile =
+      await getAdminProfile();
+
+    if (!adminProfile) {
+      clearAdminCredentials();
+
+      window.location.href =
+        "/admin/login";
+
+      return;
     }
 
-  }, [id]);
+    setProfile(adminProfile);
 
+    const canView =
+      adminProfile.role === "SUPER_ADMIN" ||
+      adminProfile.permissions?.includes(
+        "ORDERS_VIEW"
+      );
 
-  // =========================
-  // UPDATE STATUS
-  // =========================
+    if (!canView) {
+      setError(
+        "You do not have permission to view orders."
+      );
 
+      setLoading(false);
+
+      return;
+    }
+
+    if (id) {
+      await fetchOrder();
+      await fetchStatusHistory();
+      await fetchShipmentHistory();
+    }
+  }
+
+  loadPermissionsAndOrder();
+
+}, [id]);
+
+  // =========================================================
+  // UPDATE ORDER STATUS
+  // =========================================================
+  
   async function updateOrderStatus() {
-
+        if (!canManageOrders) {
+      setError(
+        "You do not have permission to manage orders."
+      );
+      return;
+    }
     if (!order) {
       return;
     }
@@ -229,19 +566,19 @@ setExpectedDeliveryDate(
       setSuccess("");
 
       const credentials =
-  getAdminCredentials();
+        getAdminCredentials();
 
-if (!credentials) {
-      window.location.href =
+      if (!credentials) {
+
+        window.location.href =
           "/admin/login";
 
         return;
       }
 
-
       const response =
         await fetch(
-         `${API_BASE_URL}/api/admin/orders/${order.id}/status`,
+          `${API_BASE_URL}/api/admin/orders/${order.id}/status`,
           {
             method: "PUT",
 
@@ -260,7 +597,6 @@ if (!credentials) {
           }
         );
 
-
       if (response.status === 401) {
 
         clearAdminCredentials();
@@ -271,14 +607,16 @@ if (!credentials) {
         return;
       }
 
-
       if (!response.ok) {
 
+        const message =
+          await response.text();
+
         throw new Error(
+          message ||
           "Unable to update order status."
         );
       }
-
 
       const updatedOrder =
         await response.json();
@@ -286,6 +624,8 @@ if (!credentials) {
       setOrder(
         updatedOrder
       );
+
+      await fetchStatusHistory();
 
       setSuccess(
         "Order status updated successfully."
@@ -308,107 +648,237 @@ if (!credentials) {
     }
   }
 
+  // =========================================================
+  // UPDATE SHIPMENT
+  // =========================================================
+
   async function updateShipment() {
-
-  if (!order) {
-    return;
-  }
-
-  try {
-
-    setShipmentSaving(true);
-    setError("");
-    setSuccess("");
-
-    const credentials =
-      localStorage.getItem(
-        "vaelis_admin_auth"
+        if (!canManageOrders) {
+      setError(
+        "You do not have permission to manage shipment details."
       );
-
-    if (!credentials) {
-
-      window.location.href =
-        "/admin/login";
-
+      return;
+    }
+    if (!order) {
       return;
     }
 
-    const response =
-      await fetch(
-       `${API_BASE_URL}/api/admin/orders/${order.id}/shipment`,
-        {
-          method: "PUT",
+    try {
 
-          headers: {
-            "Content-Type":
-              "application/json",
+      setShipmentSaving(true);
+      setError("");
+      setSuccess("");
 
-            Authorization:
-              `Basic ${credentials}`,
-          },
+      const credentials =
+        getAdminCredentials();
 
-          body: JSON.stringify({
-            shippingPartner,
-            trackingNumber,
-            trackingUrl,
-            expectedDeliveryDate,
-          }),
-        }
+      if (!credentials) {
+
+        window.location.href =
+          "/admin/login";
+
+        return;
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/admin/orders/${order.id}/shipment`,
+          {
+            method: "PUT",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization:
+                `Basic ${credentials}`,
+            },
+
+            body: JSON.stringify({
+              shippingPartner,
+              trackingNumber,
+              trackingUrl,
+              expectedDeliveryDate,
+            }),
+          }
+        );
+
+      if (response.status === 401) {
+
+        clearAdminCredentials();
+
+        window.location.href =
+          "/admin/login";
+
+        return;
+      }
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          "Unable to update shipment."
+        );
+      }
+
+      const updatedOrder =
+        await response.json();
+
+      setOrder(
+        updatedOrder
       );
 
-    if (response.status === 401) {
+      await fetchShipmentHistory();
 
-      localStorage.removeItem(
-        "vaelis_admin_auth"
+      setSuccess(
+        "Shipment details saved successfully."
       );
 
-      window.location.href =
-        "/admin/login";
+    } catch (error) {
 
+      console.error(error);
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to update shipment."
+      );
+
+    } finally {
+
+      setShipmentSaving(false);
+
+    }
+  }
+
+  // =========================================================
+  // PROCESS REFUND
+  // =========================================================
+
+  async function processRefund() {
+        if (!canManageOrders) {
+      setError(
+        "You do not have permission to process refunds."
+      );
+      return;
+    }
+    if (!order) {
       return;
     }
 
-    if (!response.ok) {
-
-      const message =
-        await response.text();
-
-      throw new Error(
-        message ||
-        "Unable to update shipment."
-      );
+    if (
+      order.orderStatus !== "CANCELLED"
+    ) {
+      return;
     }
 
-    const updatedOrder =
-      await response.json();
+    if (
+      order.refundStatus !==
+      "REFUND_REQUIRED"
+    ) {
+      return;
+    }
 
-    setOrder(updatedOrder);
+    const confirmed =
+      window.confirm(
+        `Process refund of ${formatAmount(
+          order.total
+        )} for Order #${order.id}?\n\n` +
+        "This will create a real Razorpay refund."
+      );
 
-    setSuccess(
-      "Shipment details saved successfully."
-    );
+    if (!confirmed) {
+      return;
+    }
 
-  } catch (error) {
+    try {
 
-    console.error(error);
+      setRefundSaving(true);
+      setError("");
+      setSuccess("");
 
-    setError(
-      error instanceof Error
-        ? error.message
-        : "Failed to update shipment."
-    );
+      const credentials =
+        getAdminCredentials();
 
-  } finally {
+      if (!credentials) {
 
-    setShipmentSaving(false);
+        window.location.href =
+          "/admin/login";
 
+        return;
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/admin/orders/${order.id}/refund`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization:
+                `Basic ${credentials}`,
+            },
+          }
+        );
+
+      if (response.status === 401) {
+
+        clearAdminCredentials();
+
+        window.location.href =
+          "/admin/login";
+
+        return;
+      }
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          "Unable to process refund."
+        );
+      }
+
+      const refundedOrder =
+        await response.json();
+
+      setOrder(
+        refundedOrder
+      );
+
+      setSuccess(
+        "Refund request processed successfully."
+      );
+
+    } catch (error) {
+
+      console.error(error);
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Failed to process refund."
+      );
+
+    } finally {
+
+      setRefundSaving(false);
+
+    }
   }
-}
 
-
-  // =========================
+  // =========================================================
   // FORMAT AMOUNT
-  // =========================
+  // =========================================================
 
   function formatAmount(
     amount: number
@@ -420,14 +890,17 @@ if (!credentials) {
 
   }
 
-
-  // =========================
+  // =========================================================
   // FORMAT DATE
-  // =========================
+  // =========================================================
 
   function formatDate(
-    date: string
+    date: string | null
   ) {
+
+    if (!date) {
+      return "Not available";
+    }
 
     return new Date(
       date
@@ -441,10 +914,66 @@ if (!credentials) {
 
   }
 
+  // =========================================================
+  // FORMAT DELIVERY DATE
+  // =========================================================
 
-  // =========================
+  function formatDeliveryDate(
+    date: string | null
+  ) {
+
+    if (!date) {
+      return "Not available";
+    }
+
+    const normalizedDate =
+      /^\d{4}-\d{2}-\d{2}$/.test(date)
+        ? `${date}T00:00:00`
+        : date;
+
+    return new Date(
+      normalizedDate
+    ).toLocaleDateString(
+      "en-IN",
+      {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }
+    );
+
+  }
+
+  // =========================================================
+  // REFUND STATUS LABEL
+  // =========================================================
+
+  function getRefundStatusClass(
+    status: string | null
+  ) {
+
+    switch (status) {
+
+      case "REFUNDED":
+        return "bg-green-500/10 text-green-400";
+
+      case "REFUND_INITIATED":
+        return "bg-blue-500/10 text-blue-400";
+
+      case "REFUND_FAILED":
+        return "bg-red-500/10 text-red-400";
+
+      case "REFUND_REQUIRED":
+        return "bg-yellow-500/10 text-yellow-400";
+
+      default:
+        return "bg-white/5 text-white/40";
+    }
+  }
+
+  // =========================================================
   // STATUS INDEX
-  // =========================
+  // =========================================================
 
   const currentStatusIndex =
     order
@@ -453,10 +982,9 @@ if (!credentials) {
         )
       : -1;
 
-
-  // =========================
+  // =========================================================
   // LOADING
-  // =========================
+  // =========================================================
 
   if (loading) {
 
@@ -480,10 +1008,9 @@ if (!credentials) {
     );
   }
 
-
-  // =========================
+  // =========================================================
   // ERROR
-  // =========================
+  // =========================================================
 
   if (error && !order) {
 
@@ -498,7 +1025,6 @@ if (!credentials) {
             {error}
 
           </div>
-
 
           <Link
             href="/admin/orders"
@@ -520,27 +1046,23 @@ if (!credentials) {
     );
   }
 
-
   if (!order) {
     return null;
   }
 
-
-  // =========================
+  // =========================================================
   // PAGE
-  // =========================
+  // =========================================================
 
   return (
 
     <main className="min-h-screen bg-[#050505] text-white">
 
-
-      {/* CONTENT */}
-
       <section className="mx-auto max-w-7xl px-6 py-10">
 
-
-        {/* BACK */}
+        {/* =================================================
+            BACK
+        ================================================= */}
 
         <Link
           href="/admin/orders"
@@ -555,19 +1077,17 @@ if (!credentials) {
 
         </Link>
 
-
-        {/* TITLE */}
+        {/* =================================================
+            TITLE
+        ================================================= */}
 
         <div className="mb-8">
 
           <div className="flex flex-wrap items-center gap-3">
 
             <h1 className="text-2xl font-medium">
-
               Order #{order.id}
-
             </h1>
-
 
             <span
               className={`rounded-full px-3 py-1 text-xs ${
@@ -577,67 +1097,55 @@ if (!credentials) {
                   : "bg-yellow-500/10 text-yellow-400"
               }`}
             >
-
               {order.paymentStatus}
-
             </span>
 
-
             <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/60">
-
               {order.orderStatus}
-
             </span>
 
           </div>
 
-
           <p className="mt-2 text-sm text-white/30">
-
             Placed on{" "}
-
             {formatDate(
               order.createdAt
             )}
-
           </p>
 
         </div>
 
-
-        {/* MESSAGES */}
+        {/* =================================================
+            MESSAGES
+        ================================================= */}
 
         {error && (
 
           <div className="mb-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-sm text-red-300">
-
             {error}
-
           </div>
 
         )}
-
 
         {success && (
 
           <div className="mb-6 rounded-2xl border border-green-500/20 bg-green-500/10 px-5 py-4 text-sm text-green-300">
-
             {success}
-
           </div>
 
         )}
 
-
         <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
 
-
-          {/* LEFT */}
+          {/* =================================================
+              LEFT
+          ================================================= */}
 
           <div className="space-y-8">
 
-
-            {/* ORDER STATUS TIMELINE */}
+            {/* =================================================
+                ORDER STATUS TIMELINE
+            ================================================= */}
 
             <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-7">
 
@@ -646,28 +1154,20 @@ if (!credentials) {
                 <div>
 
                   <h2 className="text-lg font-medium">
-
                     Order Progress
-
                   </h2>
 
                   <p className="mt-1 text-sm text-white/30">
-
                     Track fulfillment status
-
                   </p>
 
                 </div>
 
-
                 <span className="text-sm text-white/40">
-
                   {order.orderStatus}
-
                 </span>
 
               </div>
-
 
               <div className="mt-8">
 
@@ -683,7 +1183,6 @@ if (!credentials) {
                       const active =
                         currentStatusIndex ===
                         index;
-
 
                       return (
 
@@ -711,18 +1210,15 @@ if (!credentials) {
                               ) : (
 
                                 <span className="text-xs">
-
                                   {index + 1}
-
                                 </span>
 
                               )}
 
                             </div>
 
-
                             <span
-                              className={`mt-2 text-[10px] text-center sm:text-xs ${
+                              className={`mt-2 text-center text-[10px] sm:text-xs ${
                                 active
                                   ? "text-white"
                                   : completed
@@ -730,13 +1226,10 @@ if (!credentials) {
                                   : "text-white/25"
                               }`}
                             >
-
                               {status}
-
                             </span>
 
                           </div>
-
 
                           {index <
                             orderStatuses.length -
@@ -766,20 +1259,188 @@ if (!credentials) {
 
             </section>
 
+            {/* =================================================
+                STATUS HISTORY
+            ================================================= */}
 
-            {/* CUSTOMER */}
+            <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-7">
+
+              <div className="flex items-center justify-between">
+
+                <div>
+
+                  <h2 className="text-lg font-medium">
+                    Status History
+                  </h2>
+
+                  <p className="mt-1 text-sm text-white/30">
+                    Complete record of order status changes.
+                  </p>
+
+                </div>
+
+                {statusHistory.length > 0 && (
+
+                  <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/40">
+                    {statusHistory.length}{" "}
+                    {statusHistory.length === 1
+                      ? "change"
+                      : "changes"}
+                  </span>
+
+                )}
+
+              </div>
+
+              {/* LOADING */}
+
+              {historyLoading && (
+
+                <div className="mt-8 flex items-center justify-center py-8 text-sm text-white/30">
+
+                  <RefreshCw
+                    size={16}
+                    className="mr-2 animate-spin"
+                  />
+
+                  Loading history...
+
+                </div>
+
+              )}
+
+              {/* ERROR */}
+
+              {!historyLoading &&
+                historyError && (
+
+                  <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+
+                    {historyError}
+
+                  </div>
+
+              )}
+
+              {/* EMPTY */}
+
+              {!historyLoading &&
+                !historyError &&
+                statusHistory.length === 0 && (
+
+                  <div className="mt-8 rounded-2xl border border-white/5 bg-black/20 px-5 py-8 text-center">
+
+                    <p className="text-sm text-white/40">
+                      No status changes have been recorded yet.
+                    </p>
+
+                    <p className="mt-2 text-xs text-white/20">
+                      Status history will appear here when the order status changes.
+                    </p>
+
+                  </div>
+
+              )}
+
+              {/* HISTORY */}
+
+              {!historyLoading &&
+                !historyError &&
+                statusHistory.length > 0 && (
+
+                  <div className="mt-8">
+
+                    <div className="relative">
+
+                      <div className="absolute bottom-4 left-[7px] top-4 w-px bg-white/10" />
+
+                      <div className="space-y-7">
+
+                        {statusHistory.map(
+                          (entry) => (
+
+                            <div
+                              key={entry.id}
+                              className="relative flex gap-4"
+                            >
+
+                              <div className="relative z-10 mt-1 h-4 w-4 shrink-0 rounded-full border-2 border-white/30 bg-[#050505]" />
+
+                              <div className="min-w-0 flex-1">
+
+                                <div className="flex flex-wrap items-center gap-2">
+
+                                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white">
+                                    {entry.toStatus}
+                                  </span>
+
+                                  <span className="text-xs text-white/30">
+                                    from
+                                  </span>
+
+                                  <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/50">
+                                    {entry.fromStatus}
+                                  </span>
+
+                                </div>
+
+                                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/40">
+
+                                  <span>
+                                    By{" "}
+                                    <span className="text-white/70">
+                                      {entry.changedBy}
+                                    </span>
+                                  </span>
+
+                                  <span className="text-white/15">
+                                    •
+                                  </span>
+
+                                  <span>
+                                    {entry.changedByRole}
+                                  </span>
+
+                                  <span className="text-white/15">
+                                    •
+                                  </span>
+
+                                  <span>
+                                    {formatDate(
+                                      entry.changedAt
+                                    )}
+                                  </span>
+
+                                </div>
+
+                              </div>
+
+                            </div>
+
+                          )
+                        )}
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+              )}
+
+            </section>
+
+            {/* =================================================
+                CUSTOMER
+            ================================================= */}
 
             <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-7">
 
               <h2 className="text-lg font-medium">
-
                 Customer Details
-
               </h2>
 
-
               <div className="mt-6 grid gap-5 sm:grid-cols-2">
-
 
                 <div>
 
@@ -793,7 +1454,6 @@ if (!credentials) {
 
                 </div>
 
-
                 <div>
 
                   <p className="text-xs text-white/30">
@@ -806,7 +1466,6 @@ if (!credentials) {
 
                 </div>
 
-
                 <div>
 
                   <p className="text-xs text-white/30">
@@ -818,7 +1477,6 @@ if (!credentials) {
                   </p>
 
                 </div>
-
 
                 <div>
 
@@ -834,7 +1492,6 @@ if (!credentials) {
 
                 </div>
 
-
                 <div className="sm:col-span-2">
 
                   <p className="text-xs text-white/30">
@@ -846,11 +1503,9 @@ if (!credentials) {
                   </p>
 
                   <p className="mt-1 text-sm text-white/50">
-
                     {order.city},{" "}
                     {order.state} -{" "}
                     {order.pincode}
-
                   </p>
 
                 </div>
@@ -859,17 +1514,15 @@ if (!credentials) {
 
             </section>
 
-
-            {/* ITEMS */}
+            {/* =================================================
+                ITEMS
+            ================================================= */}
 
             <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-7">
 
               <h2 className="text-lg font-medium">
-
                 Order Items
-
               </h2>
-
 
               <div className="mt-6 space-y-5">
 
@@ -884,36 +1537,28 @@ if (!credentials) {
                       <div>
 
                         <p className="font-medium">
-
                           {item.productName}
-
                         </p>
 
                         <p className="mt-1 text-sm text-white/40">
-
                           {item.color} ×{" "}
                           {item.quantity}
-
                         </p>
 
                         <p className="mt-1 text-xs text-white/30">
-
                           ₹
                           {item.price.toLocaleString(
                             "en-IN"
-                          )} each
-
+                          )}{" "}
+                          each
                         </p>
 
                       </div>
 
-
                       <p className="font-medium">
-
                         {formatAmount(
                           item.total
                         )}
-
                       </p>
 
                     </div>
@@ -927,65 +1572,279 @@ if (!credentials) {
 
           </div>
 
-
-          {/* RIGHT */}
+          {/* =================================================
+              RIGHT
+          ================================================= */}
 
           <aside className="space-y-8">
 
+            {/* =================================================
+    STATUS CONTROL
+================================================= */}
 
-            {/* STATUS CONTROL */}
+{canManageOrders && (
+  <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-7">
 
+    <h2 className="text-lg font-medium">
+      Update Status
+    </h2>
+
+    <p className="mt-1 text-sm text-white/30">
+      Change the fulfillment status of this order.
+    </p>
+
+    <select
+      value={order.orderStatus}
+      onChange={(e) => {
+
+        setSuccess("");
+        setError("");
+
+        setOrder({
+          ...order,
+          orderStatus:
+            e.target.value,
+        });
+
+      }}
+      className="mt-5 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-white/30"
+    >
+
+      {getAvailableOrderStatuses(
+        order.orderStatus
+      ).map(
+        (status) => (
+          <option
+            key={status}
+            value={status}
+          >
+            {status}
+          </option>
+        )
+      )}
+
+    </select>
+
+    <button
+      onClick={updateOrderStatus}
+      disabled={saving}
+      className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+
+      {saving && (
+        <RefreshCw
+          size={16}
+          className="animate-spin"
+        />
+      )}
+
+      {saving
+        ? "Saving..."
+        : "Save Status"}
+
+    </button>
+
+  </section>
+)}
+            {/* =================================================
+                SHIPMENT
+            ================================================= */}
+            {canManageOrders && (
             <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-7">
 
               <h2 className="text-lg font-medium">
-
-                Update Status
-
+                Shipment & Tracking
               </h2>
 
-
               <p className="mt-1 text-sm text-white/30">
-
-                Change the fulfillment status of this order.
-
+                Add courier and tracking information.
               </p>
 
-              <select
-  value={order.orderStatus}
-  onChange={(e) => {
-    setSuccess("");
-    setError("");
+              {/* SHIPPING PARTNER */}
 
-    setOrder({
-      ...order,
-      orderStatus: e.target.value,
-    });
-  }}
-  className="mt-5 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-white/30"
->
-  {getAvailableOrderStatuses(
-    order.orderStatus
-  ).map((status) => (
-    <option
-      key={status}
-      value={status}
-    >
-      {status}
-    </option>
-  ))}
-</select>
+              <div className="mt-6">
 
+                <label className="text-xs text-white/40">
+                  Shipping Partner
+                </label>
 
+                <input
+                  type="text"
+                  value={shippingPartner}
+                  onChange={(e) =>
+                    setShippingPartner(
+                      e.target.value
+                    )
+                  }
+                  placeholder="e.g. Blue Dart"
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
+                />
+
+              </div>
+
+              {/* TRACKING NUMBER */}
+
+              <div className="mt-5">
+
+                <label className="text-xs text-white/40">
+                  Tracking / AWB Number
+                </label>
+
+                <input
+                  type="text"
+                  value={trackingNumber}
+                  onChange={(e) =>
+                    setTrackingNumber(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Enter tracking number"
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
+                />
+
+              </div>
+
+              {/* TRACKING URL */}
+
+              <div className="mt-5">
+
+                <label className="text-xs text-white/40">
+                  Tracking URL
+                </label>
+
+                <input
+                  type="url"
+                  value={trackingUrl}
+                  onChange={(e) =>
+                    setTrackingUrl(
+                      e.target.value
+                    )
+                  }
+                  placeholder="https://..."
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
+                />
+
+              </div>
+
+              {/* EXPECTED DELIVERY */}
+
+              <div className="mt-5">
+
+                <label className="text-xs text-white/40">
+                  Expected Delivery
+                </label>
+
+                <div className="relative">
+
+                  <input
+                    type="text"
+                    value={
+                      expectedDeliveryDate
+                        ? expectedDeliveryDate
+                            .split("-")
+                            .reverse()
+                            .join("")
+                        : ""
+                    }
+                    onChange={(e) => {
+
+                      const digits =
+                        e.target.value
+                          .replace(
+                            /\D/g,
+                            ""
+                          )
+                          .slice(
+                            0,
+                            8
+                          );
+
+                      if (
+                        digits.length ===
+                        8
+                      ) {
+
+                        const day =
+                          digits.slice(
+                            0,
+                            2
+                          );
+
+                        const month =
+                          digits.slice(
+                            2,
+                            4
+                          );
+
+                        const year =
+                          digits.slice(
+                            4,
+                            8
+                          );
+
+                        setExpectedDeliveryDate(
+                          `${year}-${month}-${day}`
+                        );
+
+                      } else {
+
+                        setExpectedDeliveryDate(
+                          digits
+                        );
+
+                      }
+
+                    }}
+                    placeholder="DDMMYYYY"
+                    inputMode="numeric"
+                    maxLength={8}
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 pr-12 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
+                  />
+
+                  <input
+                    type="date"
+                    value={
+                      expectedDeliveryDate &&
+                      /^\d{4}-\d{2}-\d{2}$/.test(
+                        expectedDeliveryDate
+                      )
+                        ? expectedDeliveryDate
+                        : ""
+                    }
+                    onChange={(e) =>
+                      setExpectedDeliveryDate(
+                        e.target.value
+                      )
+                    }
+                    className="absolute right-3 top-1/2 mt-1 h-6 w-6 -translate-y-1/2 cursor-pointer opacity-0"
+                    aria-label="Choose expected delivery date"
+                  />
+
+                  <span className="pointer-events-none absolute right-3 top-1/2 mt-1 -translate-y-1/2 text-white/40">
+                    📅
+                  </span>
+
+                </div>
+
+                <p className="mt-2 text-xs text-white/25">
+                  Enter DDMMYYYY manually or use the calendar.
+                </p>
+
+              </div>
+
+              {/* SAVE SHIPMENT */}
 
               <button
                 onClick={
-                  updateOrderStatus
+                  updateShipment
                 }
-                disabled={saving}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={
+                  shipmentSaving
+                }
+                className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#c9a227] px-5 py-3 text-sm font-medium text-black transition hover:bg-[#d7b33a] disabled:cursor-not-allowed disabled:opacity-50"
               >
 
-                {saving && (
+                {shipmentSaving && (
 
                   <RefreshCw
                     size={16}
@@ -994,271 +1853,300 @@ if (!credentials) {
 
                 )}
 
-                {saving
+                {shipmentSaving
                   ? "Saving..."
-                  : "Save Status"}
+                  : "Save Shipment"}
 
               </button>
 
             </section>
+            )}
+            {/* =================================================
+                SHIPMENT HISTORY
+            ================================================= */}
+          
+            <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-7">
 
-                {/* SHIPMENT */}
+              <div className="flex items-center justify-between gap-3">
 
-<section className="rounded-3xl border border-white/10 bg-white/[0.03] p-7">
+                <div>
 
-  <h2 className="text-lg font-medium">
-    Shipment & Tracking
-  </h2>
+                  <h2 className="text-lg font-medium">
+                    Shipment History
+                  </h2>
 
-  <p className="mt-1 text-sm text-white/30">
-    Add courier and tracking information.
-  </p>
+                  <p className="mt-1 text-sm text-white/30">
+                    Track who updated shipment details and when.
+                  </p>
 
+                </div>
 
-  {/* SHIPPING PARTNER */}
+                {shipmentHistory.length > 0 && (
 
-  <div className="mt-6">
+                  <span className="shrink-0 rounded-full bg-white/5 px-3 py-1 text-xs text-white/40">
+                    {shipmentHistory.length}{" "}
+                    {shipmentHistory.length === 1
+                      ? "update"
+                      : "updates"}
+                  </span>
 
-    <label className="text-xs text-white/40">
-      Shipping Partner
-    </label>
+                )}
 
-    <input
-      type="text"
-      value={shippingPartner}
-      onChange={(e) =>
-        setShippingPartner(e.target.value)
-      }
-      placeholder="e.g. Blue Dart"
-      className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
-    />
+              </div>
 
-  </div>
+              {/* LOADING */}
 
+              {shipmentHistoryLoading && (
 
-  {/* TRACKING NUMBER */}
+                <div className="mt-8 flex items-center justify-center py-8 text-sm text-white/30">
 
-  <div className="mt-5">
+                  <RefreshCw
+                    size={16}
+                    className="mr-2 animate-spin"
+                  />
 
-    <label className="text-xs text-white/40">
-      Tracking / AWB Number
-    </label>
+                  Loading shipment history...
 
-    <input
-      type="text"
-      value={trackingNumber}
-      onChange={(e) =>
-        setTrackingNumber(e.target.value)
-      }
-      placeholder="Enter tracking number"
-      className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
-    />
+                </div>
 
-  </div>
+              )}
 
+              {/* ERROR */}
 
-  {/* TRACKING URL */}
+              {!shipmentHistoryLoading &&
+                shipmentHistoryError && (
 
-  <div className="mt-5">
+                  <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
 
-    <label className="text-xs text-white/40">
-      Tracking URL
-    </label>
+                    {shipmentHistoryError}
 
-    <input
-      type="url"
-      value={trackingUrl}
-      onChange={(e) =>
-        setTrackingUrl(e.target.value)
-      }
-      placeholder="https://..."
-      className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
-    />
+                  </div>
 
-  </div>
+              )}
 
+              {/* EMPTY */}
 
-  {/* EXPECTED DELIVERY */}
+              {!shipmentHistoryLoading &&
+                !shipmentHistoryError &&
+                shipmentHistory.length === 0 && (
 
-  {/* EXPECTED DELIVERY */}
+                  <div className="mt-8 rounded-2xl border border-white/5 bg-black/20 px-5 py-8 text-center">
 
-<div className="mt-5">
+                    <p className="text-sm text-white/40">
+                      No shipment updates have been recorded yet.
+                    </p>
 
-  <label className="text-xs text-white/40">
-    Expected Delivery
-  </label>
+                    <p className="mt-2 text-xs text-white/20">
+                      Shipment history will appear here after shipment details are updated.
+                    </p>
 
-  <div className="relative">
+                  </div>
 
-    <input
-      type="text"
-      value={
-        expectedDeliveryDate
-          ? expectedDeliveryDate
-              .split("-")
-              .reverse()
-              .join("")
-          : ""
-      }
-      onChange={(e) => {
+              )}
 
-        const digits =
-          e.target.value
-            .replace(/\D/g, "")
-            .slice(0, 8);
+              {/* HISTORY */}
 
-        if (digits.length === 8) {
+              {!shipmentHistoryLoading &&
+                !shipmentHistoryError &&
+                shipmentHistory.length > 0 && (
 
-          const day =
-            digits.slice(0, 2);
+                  <div className="mt-8 space-y-5">
 
-          const month =
-            digits.slice(2, 4);
+                    {shipmentHistory.map(
+                      (entry) => (
 
-          const year =
-            digits.slice(4, 8);
+                        <div
+                          key={entry.id}
+                          className="rounded-2xl border border-white/10 bg-black/20 p-5"
+                        >
 
-          setExpectedDeliveryDate(
-            `${year}-${month}-${day}`
-          );
+                          {/* HEADER */}
 
-        } else {
+                          <div className="flex flex-wrap items-center justify-between gap-3">
 
-          setExpectedDeliveryDate(
-            digits
-          );
-        }
+                            <span className="rounded-full bg-[#c9a227]/10 px-3 py-1 text-xs font-medium text-[#d7b33a]">
+                              Shipment Updated
+                            </span>
 
-      }}
-      placeholder="DDMMYYYY"
-      inputMode="numeric"
-      maxLength={8}
-      className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 pr-12 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
-    />
+                            <span className="text-xs text-white/30">
+                              {formatDate(
+                                entry.changedAt
+                              )}
+                            </span>
 
-    <input
-      type="date"
-      value={
-        expectedDeliveryDate &&
-        /^\d{4}-\d{2}-\d{2}$/.test(
-          expectedDeliveryDate
-        )
-          ? expectedDeliveryDate
-          : ""
-      }
-      onChange={(e) =>
-        setExpectedDeliveryDate(
-          e.target.value
-        )
-      }
-      className="absolute right-3 top-1/2 mt-1 h-6 w-6 -translate-y-1/2 cursor-pointer opacity-0"
-      aria-label="Choose expected delivery date"
-    />
+                          </div>
 
-    <span className="pointer-events-none absolute right-3 top-1/2 mt-1 -translate-y-1/2 text-white/40">
-      📅
-    </span>
+                          {/* DETAILS */}
 
-  </div>
+                          <div className="mt-5 space-y-4">
 
-  <p className="mt-2 text-xs text-white/25">
-    Enter DDMMYYYY manually or use the calendar.
-  </p>
+                            {/* SHIPPING PARTNER */}
 
-</div>
+                            <div>
 
+                              <p className="text-[11px] uppercase tracking-wide text-white/25">
+                                Shipping Partner
+                              </p>
 
-  {/* SAVE */}
+                              <p className="mt-1 text-sm text-white/80">
+                                {entry.shippingPartner ||
+                                  "Not available"}
+                              </p>
 
-  <button
-    onClick={updateShipment}
-    disabled={shipmentSaving}
-    className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-[#c9a227] px-5 py-3 text-sm font-medium text-black transition hover:bg-[#d7b33a] disabled:cursor-not-allowed disabled:opacity-50"
-  >
+                            </div>
 
-    {shipmentSaving && (
-      <RefreshCw
-        size={16}
-        className="animate-spin"
-      />
-    )}
+                            {/* TRACKING NUMBER */}
 
-    {shipmentSaving
-      ? "Saving..."
-      : "Save Shipment"}
+                            <div>
 
-  </button>
+                              <p className="text-[11px] uppercase tracking-wide text-white/25">
+                                Tracking / AWB
+                              </p>
 
-</section>
+                              <p className="mt-1 break-all text-sm text-white/80">
+                                {entry.trackingNumber ||
+                                  "Not available"}
+                              </p>
 
+                            </div>
 
-            {/* PAYMENT */}
+                            {/* TRACKING URL */}
+
+                            {entry.trackingUrl && (
+
+                              <div>
+
+                                <p className="text-[11px] uppercase tracking-wide text-white/25">
+                                  Tracking URL
+                                </p>
+
+                                <a
+                                  href={entry.trackingUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="mt-1 block break-all text-sm text-blue-400 hover:text-blue-300"
+                                >
+                                  {entry.trackingUrl}
+                                </a>
+
+                              </div>
+
+                            )}
+
+                            {/* EXPECTED DELIVERY */}
+
+                            <div>
+
+                              <p className="text-[11px] uppercase tracking-wide text-white/25">
+                                Expected Delivery
+                              </p>
+
+                              <p className="mt-1 text-sm text-white/80">
+                                {formatDeliveryDate(
+                                  entry.expectedDeliveryDate
+                                )}
+                              </p>
+
+                            </div>
+
+                          </div>
+
+                          {/* USER */}
+
+                          <div className="mt-5 border-t border-white/10 pt-4">
+
+                            <p className="text-xs text-white/30">
+                              Updated by
+                            </p>
+
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+
+                              <span className="text-sm text-white/80">
+                                {entry.changedBy}
+                              </span>
+
+                              <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] text-white/40">
+                                {entry.changedByRole}
+                              </span>
+
+                            </div>
+
+                          </div>
+
+                        </div>
+
+                      )
+                    )}
+
+                  </div>
+
+              )}
+
+            </section>
+
+            {/* =================================================
+                PAYMENT
+            ================================================= */}
 
             <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-7">
 
-              <h2 className="text-lg font-medium">
+              <div className="flex items-center justify-between">
 
-                Payment
+                <h2 className="text-lg font-medium">
+                  Payment
+                </h2>
 
-              </h2>
+                <span
+                  className={`rounded-full px-3 py-1 text-xs ${
+                    order.paymentStatus ===
+                    "PAID"
+                      ? "bg-green-500/10 text-green-400"
+                      : "bg-yellow-500/10 text-yellow-400"
+                  }`}
+                >
+                  {order.paymentStatus}
+                </span>
 
+              </div>
 
               <div className="mt-6 space-y-5">
 
+                <div>
 
-                <div className="flex justify-between">
+                  <p className="text-xs text-white/30">
+                    Amount
+                  </p>
 
-                  <span className="text-sm text-white/40">
-                    Status
-                  </span>
-
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs ${
-                      order.paymentStatus ===
-                      "PAID"
-                        ? "bg-green-500/10 text-green-400"
-                        : "bg-yellow-500/10 text-yellow-400"
-                    }`}
-                  >
-
-                    {order.paymentStatus}
-
-                  </span>
+                  <p className="mt-1 text-lg font-medium">
+                    {formatAmount(
+                      order.total
+                    )}
+                  </p>
 
                 </div>
-
 
                 <div>
 
                   <p className="text-xs text-white/30">
-
                     Razorpay Order ID
-
                   </p>
 
                   <p className="mt-2 break-all text-sm">
-
                     {order.razorpayOrderId ||
                       "Not available"}
-
                   </p>
 
                 </div>
 
-
                 <div>
 
                   <p className="text-xs text-white/30">
-
                     Razorpay Payment ID
-
                   </p>
 
                   <p className="mt-2 break-all text-sm">
-
                     {order.razorpayPaymentId ||
                       "Not available"}
-
                   </p>
 
                 </div>
@@ -1267,20 +2155,214 @@ if (!credentials) {
 
             </section>
 
+            {/* =================================================
+                REFUND
+            ================================================= */}
 
-            {/* SUMMARY */}
+            <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-7">
+
+              <div className="flex items-center justify-between gap-3">
+
+                <div>
+
+                  <h2 className="text-lg font-medium">
+                    Refund
+                  </h2>
+
+                  <p className="mt-1 text-sm text-white/30">
+                    Manage the Razorpay refund for this order.
+                  </p>
+
+                </div>
+
+                <span
+                  className={`rounded-full px-3 py-1 text-xs ${getRefundStatusClass(
+                    order.refundStatus
+                  )}`}
+                >
+                  {order.refundStatus ||
+                    "NONE"}
+                </span>
+
+              </div>
+
+              <div className="mt-6 space-y-5">
+
+                {/* REFUND AMOUNT */}
+
+                <div className="flex justify-between">
+
+                  <span className="text-sm text-white/40">
+                    Refund Amount
+                  </span>
+
+                  <span className="text-sm font-medium">
+                    {order.refundedAmount != null
+                      ? formatAmount(
+                          order.refundedAmount
+                        )
+                      : formatAmount(
+                          order.total
+                        )}
+                  </span>
+
+                </div>
+
+                {/* REFUND ID */}
+
+                <div>
+
+                  <p className="text-xs text-white/30">
+                    Razorpay Refund ID
+                  </p>
+
+                  <p className="mt-2 break-all text-sm">
+                    {order.razorpayRefundId ||
+                      "Not available"}
+                  </p>
+
+                </div>
+
+                {/* REFUND INITIATED */}
+
+                <div>
+
+                  <p className="text-xs text-white/30">
+                    Refund Initiated
+                  </p>
+
+                  <p className="mt-2 text-sm">
+                    {formatDate(
+                      order.refundInitiatedAt
+                    )}
+                  </p>
+
+                </div>
+
+                {/* REFUND REQUIRED */}
+
+                {order.refundStatus ===
+                  "REFUND_REQUIRED" && (
+
+                  <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/[0.05] p-4">
+
+                    <p className="text-sm text-yellow-300">
+                      This cancelled paid order is ready for refund.
+                    </p>
+
+                    <p className="mt-1 text-xs text-white/30">
+                      Refund amount:{" "}
+                      {formatAmount(
+                        order.total
+                      )}
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={
+                        processRefund
+                      }
+                      disabled={
+                        refundSaving
+                      }
+                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#c9a227] px-5 py-3 text-sm font-medium text-black transition hover:bg-[#d7b33a] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+
+                      {refundSaving && (
+
+                        <RefreshCw
+                          size={16}
+                          className="animate-spin"
+                        />
+
+                      )}
+
+                      {refundSaving
+                        ? "Processing Refund..."
+                        : `Process Refund ${formatAmount(
+                            order.total
+                          )}`}
+
+                    </button>
+
+                  </div>
+
+                )}
+
+                {/* REFUNDED */}
+
+                {order.refundStatus ===
+                  "REFUNDED" && (
+
+                  <div className="rounded-2xl border border-green-500/20 bg-green-500/[0.05] p-4">
+
+                    <p className="text-sm text-green-300">
+                      Refund completed successfully.
+                    </p>
+
+                    <p className="mt-1 text-xs text-white/30">
+                      Refund ID:{" "}
+                      {order.razorpayRefundId ||
+                        "Not available"}
+                    </p>
+
+                  </div>
+
+                )}
+
+                {/* REFUND INITIATED */}
+
+                {order.refundStatus ===
+                  "REFUND_INITIATED" && (
+
+                  <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.05] p-4">
+
+                    <p className="text-sm text-blue-300">
+                      Refund has been initiated.
+                    </p>
+
+                    <p className="mt-1 text-xs text-white/30">
+                      Razorpay is processing the refund.
+                    </p>
+
+                  </div>
+
+                )}
+
+                {/* REFUND FAILED */}
+
+                {order.refundStatus ===
+                  "REFUND_FAILED" && (
+
+                  <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.05] p-4">
+
+                    <p className="text-sm text-red-300">
+                      The previous refund attempt failed.
+                    </p>
+
+                    <p className="mt-1 text-xs text-white/30">
+                      Check the Razorpay payment details before retrying.
+                    </p>
+
+                  </div>
+
+                )}
+
+              </div>
+
+            </section>
+
+            {/* =================================================
+                ORDER SUMMARY
+            ================================================= */}
 
             <section className="rounded-3xl border border-white/10 bg-white/[0.03] p-7">
 
               <h2 className="text-lg font-medium">
-
                 Order Summary
-
               </h2>
 
-
               <div className="mt-6 space-y-4 text-sm">
-
 
                 <div className="flex justify-between text-white/50">
 
@@ -1295,7 +2377,6 @@ if (!credentials) {
                   </span>
 
                 </div>
-
 
                 <div className="flex justify-between text-white/50">
 
@@ -1315,7 +2396,6 @@ if (!credentials) {
                   </span>
 
                 </div>
-
 
                 <div className="flex justify-between border-t border-white/10 pt-5 text-lg">
 

@@ -61,12 +61,28 @@ public class ProductService {
     public Product createProduct(
             Product product) {
 
+        if (product.getId() == null ||
+                product.getId().isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Product ID is required"
+            );
+        }
+
         if (productRepository.existsById(
                 product.getId())) {
 
             throw new IllegalArgumentException(
                     "Product ID already exists: "
                             + product.getId()
+            );
+        }
+
+        if (product.getSlug() == null ||
+                product.getSlug().isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Product slug is required"
             );
         }
 
@@ -79,6 +95,12 @@ public class ProductService {
                             + product.getSlug()
             );
         }
+
+        // =====================================================
+        // INVENTORY VALIDATION
+        // =====================================================
+
+        normalizeInventory(product);
 
         prepareProductImages(product);
 
@@ -102,6 +124,35 @@ public class ProductService {
                                                 + id
                                 )
                         );
+
+        // =====================================================
+        // SLUG
+        // =====================================================
+
+        if (updatedProduct.getSlug() == null ||
+                updatedProduct.getSlug().isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Product slug is required"
+            );
+        }
+
+        Optional<Product> productWithSlug =
+                productRepository
+                        .findBySlug(
+                                updatedProduct.getSlug()
+                        );
+
+        if (productWithSlug.isPresent() &&
+                !productWithSlug.get()
+                        .getId()
+                        .equals(id)) {
+
+            throw new IllegalArgumentException(
+                    "Product slug already exists: "
+                            + updatedProduct.getSlug()
+            );
+        }
 
         product.setSlug(
                 updatedProduct.getSlug()
@@ -150,9 +201,90 @@ public class ProductService {
                         .getReviewCount()
         );
 
-        product.setInStock(
-                updatedProduct.getInStock()
-        );
+        // =====================================================
+        // INVENTORY
+        // =====================================================
+
+        Integer stockQuantity =
+                updatedProduct.getStockQuantity();
+
+        if (stockQuantity != null &&
+                stockQuantity < 0) {
+
+            throw new IllegalArgumentException(
+                    "Stock quantity cannot be negative"
+            );
+        }
+
+        Integer lowStockThreshold =
+                updatedProduct
+                        .getLowStockThreshold();
+
+        if (lowStockThreshold != null &&
+                lowStockThreshold < 0) {
+
+            throw new IllegalArgumentException(
+                    "Low stock threshold cannot be negative"
+            );
+        }
+
+        if (stockQuantity != null) {
+
+            product.setStockQuantity(
+                    stockQuantity
+            );
+
+            product.setInStock(
+                    stockQuantity > 0
+            );
+
+        } else if (
+                updatedProduct.getInStock() != null
+        ) {
+
+            /*
+             * Backward compatibility with the
+             * existing admin product API.
+             *
+             * If the old UI sends only inStock:
+             *
+             * true  -> preserve existing quantity,
+             *          unless it is zero.
+             *
+             * false -> quantity becomes zero.
+             */
+
+            if (Boolean.FALSE.equals(
+                    updatedProduct.getInStock()
+            )) {
+
+                product.setStockQuantity(0);
+                product.setInStock(false);
+
+            } else {
+
+                Integer existingQuantity =
+                        product.getStockQuantity();
+
+                product.setInStock(
+                        existingQuantity != null &&
+                                existingQuantity > 0
+                );
+            }
+        }
+
+        if (lowStockThreshold != null) {
+
+            product.setLowStockThreshold(
+                    lowStockThreshold
+            );
+        }
+
+        ensureInventoryDefaults(product);
+
+        // =====================================================
+        // COLLECTIONS
+        // =====================================================
 
         product.setColors(
                 updatedProduct.getColors()
@@ -167,7 +299,10 @@ public class ProductService {
                         .getSpecifications()
         );
 
-        // Replace images safely
+        // =====================================================
+        // REPLACE IMAGES SAFELY
+        // =====================================================
+
         product.getImages().clear();
 
         if (updatedProduct.getImages()
@@ -193,11 +328,29 @@ public class ProductService {
     // =========================
     // UPDATE STOCK
     // =========================
+    //
+    // Legacy endpoint:
+    //
+    // PATCH /api/products/admin/{id}/stock
+    //
+    // {
+    //     "inStock": true
+    // }
+    //
+    // Kept for backward compatibility.
+    // =========================
 
     @Transactional
     public Product updateStock(
             String id,
             Boolean inStock) {
+
+        if (inStock == null) {
+
+            throw new IllegalArgumentException(
+                    "inStock is required"
+            );
+        }
 
         Product product =
                 productRepository.findById(id)
@@ -208,7 +361,117 @@ public class ProductService {
                                 )
                         );
 
-        product.setInStock(inStock);
+        if (Boolean.FALSE.equals(inStock)) {
+
+            product.setStockQuantity(0);
+            product.setInStock(false);
+
+        } else {
+
+            Integer currentQuantity =
+                    product.getStockQuantity();
+
+            /*
+             * Do not invent stock when enabling
+             * an existing product.
+             *
+             * Admin should use quantity management
+             * to add stock.
+             */
+            if (currentQuantity == null ||
+                    currentQuantity <= 0) {
+
+                throw new IllegalArgumentException(
+                        "Cannot mark product as in stock "
+                                + "when stock quantity is zero. "
+                                + "Add stock quantity first."
+                );
+            }
+
+            product.setInStock(true);
+        }
+
+        return productRepository.save(product);
+    }
+
+    // =========================
+    // UPDATE STOCK QUANTITY
+    // =========================
+
+    @Transactional
+    public Product updateStockQuantity(
+            String id,
+            Integer stockQuantity) {
+
+        if (stockQuantity == null) {
+
+            throw new IllegalArgumentException(
+                    "Stock quantity is required"
+            );
+        }
+
+        if (stockQuantity < 0) {
+
+            throw new IllegalArgumentException(
+                    "Stock quantity cannot be negative"
+            );
+        }
+
+        Product product =
+                productRepository.findById(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Product not found: "
+                                                + id
+                                )
+                        );
+
+        product.setStockQuantity(
+                stockQuantity
+        );
+
+        product.setInStock(
+                stockQuantity > 0
+        );
+
+        return productRepository.save(product);
+    }
+
+    // =========================
+    // UPDATE LOW STOCK THRESHOLD
+    // =========================
+
+    @Transactional
+    public Product updateLowStockThreshold(
+            String id,
+            Integer lowStockThreshold) {
+
+        if (lowStockThreshold == null) {
+
+            throw new IllegalArgumentException(
+                    "Low stock threshold is required"
+            );
+        }
+
+        if (lowStockThreshold < 0) {
+
+            throw new IllegalArgumentException(
+                    "Low stock threshold cannot be negative"
+            );
+        }
+
+        Product product =
+                productRepository.findById(id)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Product not found: "
+                                                + id
+                                )
+                        );
+
+        product.setLowStockThreshold(
+                lowStockThreshold
+        );
 
         return productRepository.save(product);
     }
@@ -442,6 +705,81 @@ public class ProductService {
 
         productImageRepository.saveAll(
                 images
+        );
+    }
+
+    // =========================
+    // INVENTORY NORMALIZATION
+    // =========================
+
+    private void normalizeInventory(
+            Product product) {
+
+        Integer quantity =
+                product.getStockQuantity();
+
+        if (quantity == null) {
+            quantity = 0;
+        }
+
+        if (quantity < 0) {
+
+            throw new IllegalArgumentException(
+                    "Stock quantity cannot be negative"
+            );
+        }
+
+        product.setStockQuantity(
+                quantity
+        );
+
+        Integer threshold =
+                product.getLowStockThreshold();
+
+        if (threshold == null) {
+            threshold = 5;
+        }
+
+        if (threshold < 0) {
+
+            throw new IllegalArgumentException(
+                    "Low stock threshold cannot be negative"
+            );
+        }
+
+        product.setLowStockThreshold(
+                threshold
+        );
+
+        product.setInStock(
+                quantity > 0
+        );
+    }
+
+    // =========================
+    // INVENTORY DEFAULTS
+    // =========================
+
+    private void ensureInventoryDefaults(
+            Product product) {
+
+        Integer quantity =
+                product.getStockQuantity();
+
+        if (quantity == null) {
+            quantity = 0;
+            product.setStockQuantity(0);
+        }
+
+        Integer threshold =
+                product.getLowStockThreshold();
+
+        if (threshold == null) {
+            product.setLowStockThreshold(5);
+        }
+
+        product.setInStock(
+                quantity > 0
         );
     }
 

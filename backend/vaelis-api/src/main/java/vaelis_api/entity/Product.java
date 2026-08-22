@@ -54,8 +54,18 @@ public class Product {
 
     private Integer reviewCount;
 
+    // =========================
+    // INVENTORY
+    // =========================
+
     @Column(nullable = false)
-    private Boolean inStock;
+    private Boolean inStock = false;
+
+    @Column(nullable = false)
+    private Integer stockQuantity = 0;
+
+    @Column(nullable = false)
+    private Integer lowStockThreshold = 5;
 
     // =========================
     // COLORS
@@ -236,6 +246,10 @@ public class Product {
                 reviewCount;
     }
 
+    // =========================
+    // INVENTORY GETTERS / SETTERS
+    // =========================
+
     public Boolean getInStock() {
         return inStock;
     }
@@ -243,6 +257,32 @@ public class Product {
     public void setInStock(Boolean inStock) {
         this.inStock = inStock;
     }
+
+    public Integer getStockQuantity() {
+        return stockQuantity;
+    }
+
+    public void setStockQuantity(
+            Integer stockQuantity) {
+
+        this.stockQuantity =
+                stockQuantity;
+    }
+
+    public Integer getLowStockThreshold() {
+        return lowStockThreshold;
+    }
+
+    public void setLowStockThreshold(
+            Integer lowStockThreshold) {
+
+        this.lowStockThreshold =
+                lowStockThreshold;
+    }
+
+    // =========================
+    // COLLECTION GETTERS / SETTERS
+    // =========================
 
     public List<String> getColors() {
         return colors;

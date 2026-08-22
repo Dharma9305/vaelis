@@ -1,4 +1,5 @@
 "use client";
+
 import API_BASE_URL from "@/lib/api";
 import { motion } from "framer-motion";
 import {
@@ -10,6 +11,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import Header from "../../components/layout/Header";
+
 type ProductImage = {
   id?: number;
   imageUrl: string;
@@ -36,7 +38,15 @@ type Product = {
   badge: string | null;
   rating: number | null;
   reviewCount: number | null;
+
+  // =========================
+  // INVENTORY
+  // =========================
+
   inStock: boolean;
+  stockQuantity: number;
+  lowStockThreshold: number;
+
   colors: string[];
   features: string[];
   specifications: ProductSpecification[];
@@ -71,17 +81,73 @@ export default function ProductsPage() {
   const [error, setError] =
     useState("");
 
-  // =========================
+  // =========================================================
+  // NORMALIZE PRODUCT
+  // =========================================================
+
+  function normalizeProduct(
+    product: Product
+  ): Product {
+
+    const stockQuantity =
+      Math.max(
+        0,
+        Number(
+          product.stockQuantity ?? 0
+        )
+      );
+
+    const lowStockThreshold =
+      Math.max(
+        0,
+        Number(
+          product.lowStockThreshold ?? 5
+        )
+      );
+
+    return {
+      ...product,
+
+      stockQuantity,
+
+      lowStockThreshold,
+
+      // Stock quantity is the source of truth.
+      inStock:
+        stockQuantity > 0,
+
+      colors:
+        product.colors || [],
+
+      features:
+        product.features || [],
+
+      specifications:
+        product.specifications || [],
+
+      images:
+        product.images || [],
+    };
+  }
+
+  // =========================================================
   // FETCH PRODUCTS
-  // =========================
+  // =========================================================
 
   useEffect(() => {
 
-    async function loadProducts() {
+    let cancelled = false;
+
+    async function loadProducts(
+      showLoading = true
+    ) {
 
       try {
 
-        setLoading(true);
+        if (showLoading) {
+          setLoading(true);
+        }
+
         setError("");
 
         const response =
@@ -94,6 +160,7 @@ export default function ProductsPage() {
           );
 
         if (!response.ok) {
+
           throw new Error(
             "Unable to load products."
           );
@@ -102,57 +169,83 @@ export default function ProductsPage() {
         const data =
           await response.json();
 
-        console.log(
-          "VAELIS PRODUCTS:",
-          data
-        );
+        if (cancelled) {
+          return;
+        }
+
+        const normalizedProducts =
+          Array.isArray(data)
+            ? data.map(
+                (product: Product) =>
+                  normalizeProduct(
+                    product
+                  )
+              )
+            : [];
 
         setProducts(
-          data.map(
-            (product: Product) => ({
-              ...product,
-
-              colors:
-                product.colors || [],
-
-              features:
-                product.features || [],
-
-              specifications:
-                product.specifications || [],
-
-              images:
-                product.images || [],
-            })
-          )
+          normalizedProducts
         );
 
       } catch (error) {
+
+        if (cancelled) {
+          return;
+        }
 
         console.error(
           "Products API error:",
           error
         );
 
-        setError(
-          error instanceof Error
-            ? error.message
-            : "Unable to load products."
-        );
+        if (showLoading) {
+
+          setError(
+            error instanceof Error
+              ? error.message
+              : "Unable to load products."
+          );
+        }
 
       } finally {
 
-        setLoading(false);
+        if (
+          !cancelled &&
+          showLoading
+        ) {
+          setLoading(false);
+        }
       }
     }
 
-    loadProducts();
+    loadProducts(true);
+
+    // =======================================================
+    // LIVE STOCK REFRESH
+    // =======================================================
+
+    const interval =
+      window.setInterval(
+        () => {
+          loadProducts(false);
+        },
+        10000
+      );
+
+    return () => {
+
+      cancelled = true;
+
+      window.clearInterval(
+        interval
+      );
+    };
 
   }, []);
 
-  // =========================
+  // =========================================================
   // FILTER + SORT
-  // =========================
+  // =========================================================
 
   const filteredProducts =
     useMemo(() => {
@@ -252,9 +345,9 @@ export default function ProductsPage() {
       sort,
     ]);
 
-  // =========================
+  // =========================================================
   // GET PRIMARY IMAGE
-  // =========================
+  // =========================================================
 
   function getProductImage(
     product: Product
@@ -280,6 +373,57 @@ export default function ProductsPage() {
       images[0]?.imageUrl ||
       null
     );
+  }
+
+  // =========================================================
+  // INVENTORY STATUS
+  // =========================================================
+
+  function getInventoryStatus(
+    product: Product
+  ) {
+
+    const stock =
+      Math.max(
+        0,
+        Number(
+          product.stockQuantity ?? 0
+        )
+      );
+
+    const threshold =
+      Math.max(
+        0,
+        Number(
+          product.lowStockThreshold ?? 5
+        )
+      );
+
+    if (stock <= 0) {
+
+      return {
+        type: "out" as const,
+        label: "OUT OF STOCK",
+      };
+    }
+
+    if (
+      stock <= threshold
+    ) {
+
+      return {
+        type: "low" as const,
+        label:
+          stock === 1
+            ? "ONLY 1 LEFT"
+            : `ONLY ${stock} LEFT`,
+      };
+    }
+
+    return {
+      type: "available" as const,
+      label: "IN STOCK",
+    };
   }
 
   return (
@@ -547,6 +691,19 @@ export default function ProductsPage() {
                         product
                       );
 
+                    const inventory =
+                      getInventoryStatus(
+                        product
+                      );
+
+                    const isOutOfStock =
+                      inventory.type ===
+                      "out";
+
+                    const isLowStock =
+                      inventory.type ===
+                      "low";
+
                     return (
 
                       <motion.article
@@ -604,7 +761,11 @@ export default function ProductsPage() {
                                   ?.altText ||
                                 product.name
                               }
-                              className="relative z-10 h-full w-full object-contain p-8 transition duration-700 group-hover:scale-110"
+                              className={`relative z-10 h-full w-full object-contain p-8 transition duration-700 group-hover:scale-110 ${
+                                isOutOfStock
+                                  ? "opacity-40 grayscale"
+                                  : ""
+                              }`}
                               onError={() => {
 
                                 console.error(
@@ -619,7 +780,13 @@ export default function ProductsPage() {
 
                             /* FALLBACK */
 
-                            <div className="relative h-48 w-48 rounded-[45px] border border-white/10 bg-white/[0.04] shadow-[0_30px_80px_rgba(0,0,0,0.8)] backdrop-blur-sm transition duration-700 group-hover:scale-110">
+                            <div
+                              className={`relative h-48 w-48 rounded-[45px] border border-white/10 bg-white/[0.04] shadow-[0_30px_80px_rgba(0,0,0,0.8)] backdrop-blur-sm transition duration-700 group-hover:scale-110 ${
+                                isOutOfStock
+                                  ? "opacity-40 grayscale"
+                                  : ""
+                              }`}
+                            >
 
                               <div className="flex h-full items-center justify-center">
 
@@ -645,13 +812,23 @@ export default function ProductsPage() {
 
                           )}
 
-                          {/* OUT OF STOCK */}
+                          {/* INVENTORY BADGE */}
 
-                          {!product.inStock && (
+                          {isOutOfStock && (
 
-                            <span className="absolute right-6 top-6 z-20 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[10px] tracking-wider text-red-300 backdrop-blur">
+                            <span className="absolute right-6 top-6 z-20 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[10px] font-medium tracking-wider text-red-300 backdrop-blur">
 
                               OUT OF STOCK
+
+                            </span>
+
+                          )}
+
+                          {isLowStock && (
+
+                            <span className="absolute right-6 top-6 z-20 rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1.5 text-[10px] font-medium tracking-wider text-yellow-300 backdrop-blur">
+
+                              {inventory.label}
 
                             </span>
 
@@ -779,17 +956,74 @@ export default function ProductsPage() {
 
                             </div>
 
-                            <span className="flex items-center gap-2 rounded-full border border-white/10 px-4 py-2.5 text-xs text-white/60 transition group-hover:border-[#c9a227] group-hover:text-[#c9a227]">
+                            {/* INVENTORY STATUS */}
 
-                              Explore
+                            <span
+                              className={`rounded-full border px-4 py-2.5 text-[10px] font-medium tracking-wider ${
+                                isOutOfStock
+                                  ? "border-red-500/20 bg-red-500/5 text-red-300"
+                                  : isLowStock
+                                  ? "border-yellow-500/20 bg-yellow-500/5 text-yellow-300"
+                                  : "border-emerald-500/20 bg-emerald-500/5 text-emerald-300"
+                              }`}
+                            >
 
-                              <ArrowRight
-                                size={14}
-                              />
+                              {inventory.label}
 
                             </span>
 
                           </div>
+
+                          {/* AVAILABLE QUANTITY */}
+
+                          {!isOutOfStock && (
+
+                            <p
+                              className={`mt-4 text-xs ${
+                                isLowStock
+                                  ? "text-yellow-300/70"
+                                  : "text-white/30"
+                              }`}
+                            >
+
+                              {isLowStock
+                                ? `Only ${product.stockQuantity} ${
+                                    product.stockQuantity ===
+                                    1
+                                      ? "unit"
+                                      : "units"
+                                  } remaining`
+                                : `${product.stockQuantity} ${
+                                    product.stockQuantity ===
+                                    1
+                                      ? "unit"
+                                      : "units"
+                                  } available`}
+
+                            </p>
+
+                          )}
+
+                          {/* EXPLORE */}
+
+                          <a
+                            href={`/products/${product.slug}`}
+                            className={`mt-5 flex items-center justify-center gap-2 rounded-full border px-4 py-3 text-xs transition ${
+                              isOutOfStock
+                                ? "border-white/10 text-white/40 hover:border-red-500/30 hover:text-red-300"
+                                : "border-white/10 text-white/60 hover:border-[#c9a227] hover:text-[#c9a227]"
+                            }`}
+                          >
+
+                            {isOutOfStock
+                              ? "View Product"
+                              : "Explore"}
+
+                            <ArrowRight
+                              size={14}
+                            />
+
+                          </a>
 
                         </div>
 

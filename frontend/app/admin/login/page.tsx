@@ -13,63 +13,87 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
 
   async function handleLogin(
-    event: FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
+  event: FormEvent<HTMLFormElement>
+) {
+  event.preventDefault();
 
-    setLoading(true);
-    setError("");
+  setLoading(true);
+  setError("");
 
-    try {
-      const credentials =
-        btoa(`${username}:${password}`);
+  try {
+    const credentials =
+      btoa(`${username}:${password}`);
 
-      const response = await fetch(
-       `${API_BASE_URL}/api/admin/orders`,
+    const response =
+      await fetch(
+        `${API_BASE_URL}/api/admin/me`,
         {
           method: "GET",
 
           headers: {
-            Authorization: `Basic ${credentials}`,
+            Authorization:
+              `Basic ${credentials}`,
+
+            Accept:
+              "application/json",
           },
 
           cache: "no-store",
         }
       );
 
-      if (response.status === 401) {
-        throw new Error(
-          "Invalid username or password."
-        );
-      }
-
-      if (!response.ok) {
-        throw new Error(
-          "Unable to login."
-        );
-      }
-
-      // Save authentication for admin pages
-     setAdminCredentials(
-  credentials
-);
-
-      router.push("/admin/orders");
-
-    } catch (error) {
-
-      console.error(error);
-
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Unable to login."
+    if (response.status === 401) {
+      throw new Error(
+        "Invalid username or password."
       );
-
-    } finally {
-      setLoading(false);
     }
+
+    if (!response.ok) {
+      const message =
+        await response.text();
+
+      throw new Error(
+        message ||
+          "Unable to login."
+      );
+    }
+
+    const profile =
+      await response.json();
+
+    if (
+      profile?.role !== "ADMIN" &&
+      profile?.role !== "SUPER_ADMIN"
+    ) {
+      throw new Error(
+        "This account is not authorized for the Admin Panel."
+      );
+    }
+
+    // Save authentication for admin pages
+    setAdminCredentials(
+      credentials
+    );
+
+    router.push("/admin");
+
+  } catch (error) {
+
+    console.error(
+      "Admin login error:",
+      error
+    );
+
+    setError(
+      error instanceof Error
+        ? error.message
+        : "Unable to login."
+    );
+
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#050505] px-6 text-white">

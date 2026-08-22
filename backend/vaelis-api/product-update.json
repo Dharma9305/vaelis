@@ -1,0 +1,59 @@
+﻿{
+    "id":  "vaelis-watch-one",
+    "price":  5999,
+    "stockQuantity":  16,
+    "inStock":  true,
+    "shortDescription":  "Intelligence on your wrist. Built for everyday life.",
+    "features":  [
+                     "Premium AMOLED display",
+                     "Bluetooth calling",
+                     "Activity tracking",
+                     "Heart-rate monitoring",
+                     "Sleep tracking",
+                     "IP68 water resistance"
+                 ],
+    "originalPrice":  null,
+    "images":  [
+                   {
+                       "sortOrder":  0,
+                       "primaryImage":  true,
+                       "altText":  "ChatGPT Image Aug 9, 2026, 07_16_23 PM",
+                       "imageUrl":  "https://res.cloudinary.com/zzfwqv3j/image/upload/v1786808025/vaelis/products/krzyzca1mqupbipxihlm.png"
+                   }
+               ],
+    "description":  "A sophisticated smartwatch concept combining a premium display, intelligent features and everyday wellness tracking.",
+    "name":  "VAELIS Watch One",
+    "lowStockThreshold":  5,
+    "currency":  "INR",
+    "colors":  [
+                   "Titanium Black",
+                   "Silver"
+               ],
+    "badge":  "Coming Soon",
+    "slug":  "vaelis-watch-one",
+    "category":  "Wearables",
+    "reviewCount":  5,
+    "specifications":  [
+                           {
+                               "value":  "AMOLED",
+                               "label":  "Display"
+                           },
+                           {
+                               "value":  "Bluetooth Calling",
+                               "label":  "Calling"
+                           },
+                           {
+                               "value":  "IP68",
+                               "label":  "Water Resistance"
+                           },
+                           {
+                               "value":  "Magnetic",
+                               "label":  "Charging"
+                           },
+                           {
+                               "value":  "1 Year",
+                               "label":  "Warranty"
+                           }
+                       ],
+    "rating":  4.9
+}

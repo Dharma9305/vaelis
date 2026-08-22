@@ -1,7 +1,16 @@
 "use client";
+
 import API_BASE_URL from "@/lib/api";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+
+import {
+  getAdminProfile,
+  getAdminCredentials,
+  clearAdminCredentials,
+  hasAdminPermission,
+  type AdminProfile,
+} from "@/lib/adminAuth";
 
 import {
   ArrowRight,
@@ -16,13 +25,6 @@ import {
   XCircle,
   Package,
 } from "lucide-react";
-
-import {
-  getAdminCredentials,
-  clearAdminCredentials,
-} from "@/lib/adminAuth";
-
-
 
 type Order = {
   id: number;
@@ -41,42 +43,88 @@ type Order = {
 
 export default function AdminDashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [loading, setLoading] =
+    useState(true);
+  const [error, setError] =
+    useState("");
 
-  // =========================
+  const [profile, setProfile] =
+    useState<AdminProfile | null>(null);
+  const canViewDashboard =
+  hasAdminPermission(
+    profile,
+    "DASHBOARD_VIEW"
+  );
+  // =========================================================
   // FETCH ORDERS
-  // =========================
+  // =========================================================
 
   async function fetchOrders() {
     try {
       setLoading(true);
       setError("");
+            const currentProfile =
+  profile;
 
-     const credentials =
-  getAdminCredentials();
+if (
+  currentProfile &&
+  !hasAdminPermission(
+    currentProfile,
+    "DASHBOARD_VIEW"
+  )
+) {
+  setOrders([]);
+  setError("");
+  return;
+}
+      const credentials =
+        getAdminCredentials();
+
       if (!credentials) {
-        window.location.href = "/admin/login";
+        window.location.href =
+          "/admin/login";
         return;
       }
 
-      const response = await fetch(
-      `${API_BASE_URL}/api/admin/orders`,
-        {
-          method: "GET",
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/admin/orders`,
+          {
+            method: "GET",
 
-          headers: {
-            Authorization: `Basic ${credentials}`,
-          },
+            headers: {
+              Authorization:
+                `Basic ${credentials}`,
+              Accept:
+                "application/json",
+            },
 
-          cache: "no-store",
-        }
-      );
+            cache: "no-store",
+          }
+        );
+
+      // =====================================================
+      // UNAUTHORIZED
+      // =====================================================
 
       if (response.status === 401) {
-      clearAdminCredentials();
+        clearAdminCredentials();
 
-        window.location.href = "/admin/login";
+        window.location.href =
+          "/admin/login";
+
+        return;
+      }
+
+      // =====================================================
+      // FORBIDDEN
+      // =====================================================
+
+      if (response.status === 403) {
+        setError(
+          "You are not authorized to access dashboard data."
+        );
+
         return;
       }
 
@@ -86,44 +134,115 @@ export default function AdminDashboard() {
         );
       }
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
-      setOrders(data);
+      setOrders(
+        Array.isArray(data)
+          ? data
+          : []
+      );
+
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Dashboard orders error:",
+        error
+      );
 
       setError(
         error instanceof Error
           ? error.message
           : "Unable to fetch dashboard data."
       );
+
     } finally {
       setLoading(false);
     }
   }
 
-  // =========================
-  // LOAD
-  // =========================
+  // =========================================================
+  // LOAD DASHBOARD
+  // =========================================================
 
   useEffect(() => {
-    fetchOrders();
+    let mounted = true;
+
+    async function loadDashboard() {
+      const adminProfile =
+        await getAdminProfile();
+
+      if (!mounted) {
+        return;
+      }
+
+      if (!adminProfile) {
+        clearAdminCredentials();
+
+        window.location.href =
+          "/admin/login";
+
+        return;
+      }
+
+      setProfile(adminProfile);
+
+if (
+  !hasAdminPermission(
+    adminProfile,
+    "DASHBOARD_VIEW"
+  )
+) {
+  window.location.href =
+    "/admin/orders";
+
+  return;
+}
+
+await fetchOrders();
+
+if (
+  hasAdminPermission(
+    adminProfile,
+    "DASHBOARD_VIEW"
+  )
+) {
+  await fetchOrders();
+} else {
+  setOrders([]);
+  setError("");
+  setLoading(false);
+}
+    }
+
+    loadDashboard();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // =========================
+  // =========================================================
   // FORMAT AMOUNT
-  // =========================
+  // =========================================================
 
-  function formatAmount(amount: number) {
-    return `₹${amount.toLocaleString("en-IN")}`;
+  function formatAmount(
+    amount: number
+  ) {
+    return `₹${amount.toLocaleString(
+      "en-IN"
+    )}`;
   }
 
-  // =========================
+  // =========================================================
   // FORMAT DATE
-  // =========================
+  // =========================================================
 
-  function formatDate(date: string) {
-    return new Date(date).toLocaleString(
+  function formatDate(
+    date: string
+  ) {
+    return new Date(
+      date
+    ).toLocaleString(
       "en-IN",
       {
         dateStyle: "medium",
@@ -132,29 +251,40 @@ export default function AdminDashboard() {
     );
   }
 
-  // =========================
+  // =========================================================
   // DATE HELPERS
-  // =========================
+  // =========================================================
 
-  function isToday(date: string) {
-    const orderDate = new Date(date);
-    const today = new Date();
+  function isToday(
+  date: string
+) {
+  const orderDate =
+    new Date(date);
 
-    return (
-      orderDate.getFullYear() ===
-        today.getFullYear() &&
-      orderDate.getMonth() ===
-        today.getMonth() &&
-      orderDate.getDate() ===
-        today.getDate()
-    );
-  }
+  const today =
+    new Date();
 
-  function isWithinLast7Days(date: string) {
-    const orderDate = new Date(date);
-    const now = new Date();
+  return (
+    orderDate.getFullYear() ===
+      today.getFullYear() &&
+    orderDate.getMonth() ===
+      today.getMonth() &&
+    orderDate.getDate() ===
+      today.getDate()
+  );
+}
 
-    const sevenDaysAgo = new Date();
+  function isWithinLast7Days(
+    date: string
+  ) {
+    const orderDate =
+      new Date(date);
+
+    const now =
+      new Date();
+
+    const sevenDaysAgo =
+      new Date();
 
     sevenDaysAgo.setDate(
       now.getDate() - 6
@@ -167,94 +297,112 @@ export default function AdminDashboard() {
       0
     );
 
-    return orderDate >= sevenDaysAgo;
+    return (
+      orderDate >=
+      sevenDaysAgo
+    );
   }
 
-  // =========================
+  // =========================================================
   // MAIN STATISTICS
-  // =========================
+  // =========================================================
 
-  const totalOrders = orders.length;
+  const totalOrders =
+    orders.length;
 
   const paidOrders =
     orders.filter(
       (order) =>
-        order.paymentStatus === "PAID"
+        order.paymentStatus ===
+        "PAID"
     ).length;
 
   const pendingPayments =
     orders.filter(
       (order) =>
-        order.paymentStatus !== "PAID"
+        order.paymentStatus !==
+        "PAID"
     ).length;
 
   const totalRevenue =
     orders
       .filter(
         (order) =>
-          order.paymentStatus === "PAID"
+          order.paymentStatus ===
+          "PAID"
       )
       .reduce(
         (sum, order) =>
-          sum + (order.total || 0),
+          sum +
+          (order.total || 0),
         0
       );
 
-  // =========================
+  // =========================================================
   // ORDER STATUS STATISTICS
-  // =========================
+  // =========================================================
 
   const confirmedOrders =
     orders.filter(
       (order) =>
-        order.orderStatus === "CONFIRMED"
+        order.orderStatus ===
+        "CONFIRMED"
     ).length;
 
   const shippedOrders =
     orders.filter(
       (order) =>
-        order.orderStatus === "SHIPPED"
+        order.orderStatus ===
+        "SHIPPED"
     ).length;
 
   const deliveredOrders =
     orders.filter(
       (order) =>
-        order.orderStatus === "DELIVERED"
+        order.orderStatus ===
+        "DELIVERED"
     ).length;
 
   const cancelledOrders =
     orders.filter(
       (order) =>
-        order.orderStatus === "CANCELLED"
+        order.orderStatus ===
+        "CANCELLED"
     ).length;
 
-  // =========================
+  // =========================================================
   // SHIPMENT PENDING
-  // =========================
+  // =========================================================
 
   const shipmentPending =
     orders.filter(
       (order) =>
-        order.orderStatus !== "CANCELLED" &&
-        order.orderStatus !== "DELIVERED" &&
+        order.orderStatus !==
+          "CANCELLED" &&
+        order.orderStatus !==
+          "DELIVERED" &&
         !order.shippingPartner &&
         !order.trackingNumber
     ).length;
 
-  // =========================
+  // =========================================================
   // REVENUE STATISTICS
-  // =========================
+  // =========================================================
 
   const todayRevenue =
     orders
       .filter(
         (order) =>
-          order.paymentStatus === "PAID" &&
-          isToday(order.createdAt)
+          order.paymentStatus ===
+            "PAID" &&
+          isToday(
+            order.createdAt
+          )
       )
       .reduce(
         (sum, order) =>
-          sum + (order.total || 0),
+          sum +
+          (order.total || 0),
         0
       );
 
@@ -262,111 +410,126 @@ export default function AdminDashboard() {
     orders
       .filter(
         (order) =>
-          order.paymentStatus === "PAID" &&
+          order.paymentStatus ===
+            "PAID" &&
           isWithinLast7Days(
             order.createdAt
           )
       )
       .reduce(
         (sum, order) =>
-          sum + (order.total || 0),
+          sum +
+          (order.total || 0),
         0
       );
 
-  // =========================
+  // =========================================================
   // REVENUE CHART DATA
-  // =========================
+  // =========================================================
 
-  const revenueChart = Array.from(
-    { length: 7 },
-    (_, index) => {
-      const date = new Date();
+  const revenueChart =
+    Array.from(
+      { length: 7 },
+      (_, index) => {
+        const date =
+          new Date();
 
-      date.setDate(
-        date.getDate() -
-          (6 - index)
-      );
+        date.setDate(
+          date.getDate() -
+            (6 - index)
+        );
 
-      date.setHours(
-        0,
-        0,
-        0,
-        0
-      );
+        date.setHours(
+          0,
+          0,
+          0,
+          0
+        );
 
-      const nextDate = new Date(date);
+        const nextDate =
+          new Date(date);
 
-      nextDate.setDate(
-        date.getDate() + 1
-      );
+        nextDate.setDate(
+          date.getDate() + 1
+        );
 
-      const revenue =
-        orders
-          .filter(
-            (order) => {
-              if (
-                order.paymentStatus !==
-                "PAID"
-              ) {
-                return false;
-              }
+        const revenue =
+          orders
+            .filter(
+              (order) => {
+                if (
+                  order.paymentStatus !==
+                  "PAID"
+                ) {
+                  return false;
+                }
 
-              const orderDate =
-                new Date(
-                  order.createdAt
+                const orderDate =
+                  new Date(
+                    order.createdAt
+                  );
+
+                return (
+                  orderDate >=
+                    date &&
+                  orderDate <
+                    nextDate
                 );
+              }
+            )
+            .reduce(
+              (
+                sum,
+                order
+              ) =>
+                sum +
+                (order.total ||
+                  0),
+              0
+            );
 
-              return (
-                orderDate >= date &&
-                orderDate < nextDate
-              );
-            }
-          )
-          .reduce(
-            (sum, order) =>
-              sum +
-              (order.total || 0),
-            0
-          );
+        return {
+          date,
+          revenue,
 
-      return {
-        date,
-        revenue,
+          label:
+            date.toLocaleDateString(
+              "en-IN",
+              {
+                weekday:
+                  "short",
+              }
+            ),
+        };
+      }
+    );
 
-        label:
-          date.toLocaleDateString(
-            "en-IN",
-            {
-              weekday: "short",
-            }
-          ),
-      };
-    }
-  );
+  const maxRevenue =
+    Math.max(
+      ...revenueChart.map(
+        (item) =>
+          item.revenue
+      ),
+      1
+    );
 
-  const maxRevenue = Math.max(
-    ...revenueChart.map(
-      (item) =>
-        item.revenue
-    ),
-    1
-  );
-
-  // =========================
+  // =========================================================
   // RECENT ORDERS
-  // =========================
+  // =========================================================
 
   const recentOrders =
     orders.slice(0, 5);
 
-  // =========================
+  // =========================================================
   // PAGE
-  // =========================
+  // =========================================================
 
   return (
     <main className="min-h-screen bg-[#050505] text-white">
 
-      {/* DASHBOARD HEADER */}
+      {/* =====================================================
+          DASHBOARD HEADER
+          ===================================================== */}
 
       <section className="mx-auto max-w-7xl px-6 pt-10">
 
@@ -374,16 +537,33 @@ export default function AdminDashboard() {
 
           <div>
 
-            <h1 className="text-2xl font-medium">
-              Dashboard
-            </h1>
+            <div className="flex items-center gap-3">
+
+              <h1 className="text-2xl font-medium">
+                Dashboard
+              </h1>
+
+              {profile && (
+                <span
+                  className={
+                    profile.role ===
+                    "SUPER_ADMIN"
+                      ? "rounded-full border border-[#c9a227]/20 bg-[#c9a227]/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.15em] text-[#c9a227]"
+                      : "rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.15em] text-white/50"
+                  }
+                >
+                  {profile.role}
+                </span>
+              )}
+
+            </div>
 
             <p className="mt-1 text-sm text-white/40">
               Overview of your VAELIS store
             </p>
 
           </div>
-
+              {canViewDashboard && (
           <button
             onClick={fetchOrders}
             disabled={loading}
@@ -402,16 +582,20 @@ export default function AdminDashboard() {
             Refresh
 
           </button>
-
+              )}
         </div>
 
       </section>
-
-      {/* CONTENT */}
+          
+      {/* =====================================================
+          CONTENT
+          ===================================================== */}
 
       <section className="mx-auto max-w-7xl px-6 py-8">
 
-        {/* ERROR */}
+        {/* ===================================================
+            ERROR
+            =================================================== */}
 
         {error && (
           <div className="mb-8 rounded-2xl border border-red-500/20 bg-red-500/10 px-5 py-4 text-sm text-red-300">
@@ -419,8 +603,11 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* MAIN STATISTICS */}
-
+        {/* ===================================================
+            MAIN STATISTICS
+            =================================================== */}
+        {canViewDashboard && (
+  <>
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
 
           {/* TOTAL ORDERS */}
@@ -471,31 +658,29 @@ export default function AdminDashboard() {
 
           {/* PENDING PAYMENTS */}
 
-          {/* PENDING PAYMENTS */}
+          <Link
+            href="/admin/orders?payment=PENDING"
+            className="block rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-yellow-400/20 hover:bg-white/[0.05]"
+          >
 
-<Link
-  href="/admin/orders?payment=PENDING"
-  className="block rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-yellow-400/20 hover:bg-white/[0.05]"
->
+            <div className="flex items-center justify-between">
 
-  <div className="flex items-center justify-between">
+              <p className="text-sm text-white/40">
+                Pending Payments
+              </p>
 
-    <p className="text-sm text-white/40">
-      Pending Payments
-    </p>
+              <Clock
+                size={20}
+                className="text-yellow-400/60"
+              />
 
-    <Clock
-      size={20}
-      className="text-yellow-400/60"
-    />
+            </div>
 
-  </div>
+            <p className="mt-5 text-3xl font-medium">
+              {pendingPayments}
+            </p>
 
-  <p className="mt-5 text-3xl font-medium">
-    {pendingPayments}
-  </p>
-
-</Link>
+          </Link>
 
           {/* REVENUE */}
 
@@ -524,37 +709,37 @@ export default function AdminDashboard() {
 
         </div>
 
-        {/* SECONDARY STATISTICS */}
+        {/* ===================================================
+            SECONDARY STATISTICS
+            =================================================== */}
 
         <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
 
           {/* CONFIRMED */}
 
-          {/* CONFIRMED */}
+          <Link
+            href="/admin/orders?status=CONFIRMED"
+            className="block rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-blue-400/20 hover:bg-white/[0.05]"
+          >
 
-<Link
-  href="/admin/orders?status=CONFIRMED"
-  className="block rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-blue-400/20 hover:bg-white/[0.05]"
->
+            <div className="flex items-center justify-between">
 
-  <div className="flex items-center justify-between">
+              <p className="text-sm text-white/40">
+                Confirmed Orders
+              </p>
 
-    <p className="text-sm text-white/40">
-      Confirmed Orders
-    </p>
+              <CheckCircle2
+                size={20}
+                className="text-blue-400/60"
+              />
 
-    <CheckCircle2
-      size={20}
-      className="text-blue-400/60"
-    />
+            </div>
 
-  </div>
+            <p className="mt-5 text-3xl font-medium">
+              {confirmedOrders}
+            </p>
 
-  <p className="mt-5 text-3xl font-medium">
-    {confirmedOrders}
-  </p>
-
-</Link>
+          </Link>
 
           {/* TODAY */}
 
@@ -608,36 +793,37 @@ export default function AdminDashboard() {
 
         </div>
 
-        {/* ORDER STATUS STATISTICS */}
+        {/* ===================================================
+            ORDER STATUS STATISTICS
+            =================================================== */}
 
         <div className="mt-5 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
 
-
           {/* SHIPPED */}
 
-<Link
-  href="/admin/orders?status=SHIPPED"
-  className="block rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-purple-400/20 hover:bg-white/[0.05]"
->
+          <Link
+            href="/admin/orders?status=SHIPPED"
+            className="block rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-purple-400/20 hover:bg-white/[0.05]"
+          >
 
-  <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
 
-    <p className="text-sm text-white/40">
-      Shipped Orders
-    </p>
+              <p className="text-sm text-white/40">
+                Shipped Orders
+              </p>
 
-    <Truck
-      size={20}
-      className="text-purple-400/60"
-    />
+              <Truck
+                size={20}
+                className="text-purple-400/60"
+              />
 
-  </div>
+            </div>
 
-  <p className="mt-5 text-3xl font-medium">
-    {shippedOrders}
-  </p>
+            <p className="mt-5 text-3xl font-medium">
+              {shippedOrders}
+            </p>
 
-</Link>
+          </Link>
 
           {/* DELIVERED */}
 
@@ -687,34 +873,35 @@ export default function AdminDashboard() {
 
           {/* SHIPMENT PENDING */}
 
-          {/* SHIPMENT PENDING */}
+          <Link
+            href="/admin/orders?shipment=NOT_SHIPPED"
+            className="block rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-cyan-400/20 hover:bg-white/[0.05]"
+          >
 
-<Link
-  href="/admin/orders?shipment=NOT_SHIPPED"
-  className="block rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-cyan-400/20 hover:bg-white/[0.05]"
->
+            <div className="flex items-center justify-between">
 
-  <div className="flex items-center justify-between">
+              <p className="text-sm text-white/40">
+                Shipment Pending
+              </p>
 
-    <p className="text-sm text-white/40">
-      Shipment Pending
-    </p>
+              <Package
+                size={20}
+                className="text-cyan-400/60"
+              />
 
-    <Package
-      size={20}
-      className="text-cyan-400/60"
-    />
+            </div>
 
-  </div>
+            <p className="mt-5 text-3xl font-medium">
+              {shipmentPending}
+            </p>
 
-  <p className="mt-5 text-3xl font-medium">
-    {shipmentPending}
-  </p>
+          </Link>
 
-</Link>
-</div>
+        </div>
 
-        {/* REVENUE CHART */}
+        {/* ===================================================
+            REVENUE CHART
+            =================================================== */}
 
         <section className="mt-10 rounded-3xl border border-white/10 bg-white/[0.03] p-6">
 
@@ -740,8 +927,6 @@ export default function AdminDashboard() {
 
           </div>
 
-          {/* CHART */}
-
           <div className="mt-8 flex h-64 items-end gap-3 sm:gap-5">
 
             {revenueChart.map(
@@ -756,7 +941,6 @@ export default function AdminDashboard() {
                   );
 
                 return (
-
                   <div
                     key={
                       item.date.toISOString()
@@ -766,7 +950,8 @@ export default function AdminDashboard() {
 
                     <div className="mb-2 text-xs text-white/40">
 
-                      {item.revenue > 0
+                      {item.revenue >
+                      0
                         ? formatAmount(
                             item.revenue
                           )
@@ -787,7 +972,6 @@ export default function AdminDashboard() {
                     </div>
 
                   </div>
-
                 );
               }
             )}
@@ -795,12 +979,16 @@ export default function AdminDashboard() {
           </div>
 
         </section>
-
-                {/* MANAGEMENT */}
+</>
+)}
+        {/* ===================================================
+            MANAGEMENT
+            =================================================== */}
 
         <section className="mt-10">
 
           <div className="mb-5">
+
             <h2 className="text-lg font-medium">
               Management
             </h2>
@@ -808,6 +996,7 @@ export default function AdminDashboard() {
             <p className="mt-1 text-sm text-white/30">
               Manage your VAELIS store
             </p>
+
           </div>
 
           <div className="grid gap-5 md:grid-cols-2">
@@ -837,8 +1026,9 @@ export default function AdminDashboard() {
               </h3>
 
               <p className="mt-2 max-w-md text-sm leading-6 text-white/40">
-                Add, edit and manage products, product
-                images, pricing, stock and availability.
+                Add, edit and manage products,
+                product images, pricing, stock
+                and availability.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-2">
@@ -860,7 +1050,7 @@ export default function AdminDashboard() {
             </Link>
 
             {/* ORDERS & SHIPPING */}
-
+            {canViewDashboard && (
             <Link
               href="/admin/orders"
               className="group rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-cyan-400/20 hover:bg-white/[0.05]"
@@ -884,8 +1074,9 @@ export default function AdminDashboard() {
               </h3>
 
               <p className="mt-2 max-w-md text-sm leading-6 text-white/40">
-                Manage customer orders, payment status,
-                order status and shipment information.
+                Manage customer orders,
+                payment status, order status
+                and shipment information.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-2">
@@ -905,13 +1096,145 @@ export default function AdminDashboard() {
               </div>
 
             </Link>
-
+            )}
           </div>
 
         </section>
 
-        {/* RECENT ORDERS */}
+        {/* ===================================================
+            SUPER ADMIN MANAGEMENT
+            =================================================== */}
 
+        {profile?.role ===
+          "SUPER_ADMIN" && (
+
+          <section className="mt-10">
+
+            <div className="mb-5">
+
+              <div className="flex items-center gap-3">
+
+                <h2 className="text-lg font-medium">
+                  Super Admin
+                </h2>
+
+                <span className="rounded-full border border-[#c9a227]/20 bg-[#c9a227]/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.15em] text-[#c9a227]">
+                  SUPER_ADMIN
+                </span>
+
+              </div>
+
+              <p className="mt-1 text-sm text-white/30">
+                Manage administrator access
+                and approvals.
+              </p>
+
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2">
+
+              {/* ADMIN APPROVALS */}
+
+              <Link
+                href="/admin/admin-approvals"
+                className="group rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-[#c9a227]/30 hover:bg-white/[0.05]"
+              >
+
+                <div className="flex items-start justify-between">
+
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#c9a227]/10 text-2xl">
+                    🛡
+                  </div>
+
+                  <ArrowRight
+                    size={18}
+                    className="text-white/30 transition group-hover:translate-x-1 group-hover:text-white"
+                  />
+
+                </div>
+
+                <h3 className="mt-6 text-xl font-medium">
+                  Admin Approvals
+                </h3>
+
+                <p className="mt-2 max-w-md text-sm leading-6 text-white/40">
+                  Review newly registered Admin
+                  accounts and approve or reject
+                  access requests.
+                </p>
+
+                <div className="mt-6 flex flex-wrap gap-2">
+
+                  <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/50">
+                    Approve
+                  </span>
+
+                  <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/50">
+                    Reject
+                  </span>
+
+                </div>
+
+              </Link>
+
+              {/* ADMIN MANAGEMENT */}
+
+              <Link
+                href="/admin/admin-management"
+                className="group rounded-3xl border border-white/10 bg-white/[0.03] p-6 transition hover:border-green-400/20 hover:bg-white/[0.05]"
+              >
+
+                <div className="flex items-start justify-between">
+
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-green-400/10 text-2xl">
+                    👥
+                  </div>
+
+                  <ArrowRight
+                    size={18}
+                    className="text-white/30 transition group-hover:translate-x-1 group-hover:text-white"
+                  />
+
+                </div>
+
+                <h3 className="mt-6 text-xl font-medium">
+                  Admin Management
+                </h3>
+
+                <p className="mt-2 max-w-md text-sm leading-6 text-white/40">
+                  Manage approved Admin accounts,
+                  enable or disable administrator
+                  access.
+                </p>
+
+                <div className="mt-6 flex flex-wrap gap-2">
+
+                  <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/50">
+                    Active Admins
+                  </span>
+
+                  <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/50">
+                    Enable
+                  </span>
+
+                  <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/50">
+                    Disable
+                  </span>
+
+                </div>
+
+              </Link>
+
+            </div>
+
+          </section>
+        )}
+
+        {/* ===================================================
+            RECENT ORDERS
+            =================================================== */}
+        {canViewDashboard && (
+  <>
         <section className="mt-10 rounded-3xl border border-white/10 bg-white/[0.03]">
 
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-5">
@@ -949,7 +1272,8 @@ export default function AdminDashboard() {
               Loading orders...
             </div>
 
-          ) : recentOrders.length === 0 ? (
+          ) : recentOrders.length ===
+            0 ? (
 
             <div className="p-10 text-center text-white/40">
               No orders found.
@@ -996,11 +1320,15 @@ export default function AdminDashboard() {
                             : "bg-yellow-500/10 text-yellow-400"
                         }`}
                       >
-                        {order.paymentStatus}
+                        {
+                          order.paymentStatus
+                        }
                       </span>
 
                       <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/60">
-                        {order.orderStatus}
+                        {
+                          order.orderStatus
+                        }
                       </span>
 
                       {(
@@ -1037,7 +1365,8 @@ export default function AdminDashboard() {
           )}
 
         </section>
-
+          </>
+        )}
       </section>
 
     </main>

@@ -1,4 +1,5 @@
 "use client";
+
 import API_BASE_URL from "@/lib/api";
 import {
   useEffect,
@@ -10,9 +11,13 @@ import {
   ArrowRight,
   RefreshCw,
 } from "lucide-react";
+
 import {
   getAdminCredentials,
   clearAdminCredentials,
+  getAdminProfile,
+  hasAdminPermission,
+  type AdminProfile,
 } from "@/lib/adminAuth";
 
 import * as XLSX from "xlsx";
@@ -29,32 +34,48 @@ type OrderItem = {
 
 type Order = {
   id: number;
+
   customerName: string;
   email: string;
   phone: string;
+
   address: string;
   city: string;
   state: string;
   pincode: string;
+
   subtotal: number;
   deliveryCharge: number;
   total: number;
+
   paymentStatus: string;
+  paymentMethod: string | null;
+
   orderStatus: string;
-  razorpayOrderId: string;
-  razorpayPaymentId: string;
+
+  razorpayOrderId: string | null;
+  razorpayPaymentId: string | null;
+
   createdAt: string;
+
   shippingPartner: string | null;
   trackingNumber: string | null;
   trackingUrl: string | null;
   expectedDeliveryDate: string | null;
+
   items: OrderItem[];
 };
 
+type ManualPaymentMethod =
+  | "COD"
+  | "UPI"
+  | "ONLINE";
+
 export default function AdminOrdersPage() {
 
-    const searchParams =
+  const searchParams =
     useSearchParams();
+
   const [orders, setOrders] =
     useState<Order[]>([]);
 
@@ -75,20 +96,88 @@ export default function AdminOrdersPage() {
 
   const [dateFilter, setDateFilter] =
     useState("ALL");
-  
-    const [shipmentFilter, setShipmentFilter] =
-  useState("ALL");
-  
+
+  const [shipmentFilter, setShipmentFilter] =
+    useState("ALL");
+
   const [currentPage, setCurrentPage] =
     useState(1);
 
-  const ordersPerPage = 10;
+  const [processingPayment, setProcessingPayment] =
+    useState<number | null>(null);
 
-    // =========================
+  
+    const ordersPerPage = 10;
+
+    // =========================================================
+// ADMIN RBAC
+// =========================================================
+
+const [adminProfile, setAdminProfile] =
+  useState<AdminProfile | null>(null);
+
+const [permissionsLoading, setPermissionsLoading] =
+  useState(true);
+
+const canViewOrders =
+  hasAdminPermission(
+    adminProfile,
+    "ORDERS_VIEW"
+  );
+
+const canManageOrders =
+  hasAdminPermission(
+    adminProfile,
+    "ORDERS_MANAGE"
+  );
+// =========================================================
+// LOAD ADMIN PERMISSIONS
+// =========================================================
+
+async function loadAdminPermissions() {
+
+  try {
+
+    setPermissionsLoading(true);
+
+    const profile =
+      await getAdminProfile();
+
+    if (!profile) {
+
+      clearAdminCredentials();
+
+      window.location.href =
+        "/admin/login";
+
+      return;
+    }
+
+    setAdminProfile(profile);
+
+  } catch (error) {
+
+    console.error(
+      "Unable to load admin permissions:",
+      error
+    );
+
+    setError(
+      "Unable to verify admin permissions."
+    );
+
+  } finally {
+
+    setPermissionsLoading(false);
+
+  }
+}
+  // =========================================================
   // URL FILTER INITIALIZATION
-  // =========================
+  // =========================================================
 
   useEffect(() => {
+
     const payment =
       searchParams.get("payment");
 
@@ -99,31 +188,48 @@ export default function AdminOrdersPage() {
       searchParams.get("shipment");
 
     if (payment) {
-      setPaymentFilter(payment);
+      setPaymentFilter(
+        payment.toUpperCase()
+      );
     }
 
     if (status) {
-      setStatusFilter(status);
+      setStatusFilter(
+        status.toUpperCase()
+      );
     }
 
     if (shipment) {
-      setShipmentFilter(shipment);
+      setShipmentFilter(
+        shipment.toUpperCase()
+      );
     }
+
   }, [searchParams]);
 
-  // =========================
+
+  // =========================================================
   // FETCH ORDERS
-  // =========================
+  // =========================================================
 
   async function fetchOrders() {
 
     try {
+            if (!canViewOrders) {
+
+        setOrders([]);
+        setError(
+          "You do not have permission to view orders."
+        );
+
+        return;
+      }
 
       setLoading(true);
       setError("");
 
       const credentials =
-  getAdminCredentials();
+        getAdminCredentials();
 
       if (!credentials) {
 
@@ -135,7 +241,7 @@ export default function AdminOrdersPage() {
 
       const response =
         await fetch(
-         `${API_BASE_URL}/api/admin/orders`,
+          `${API_BASE_URL}/api/admin/orders`,
           {
             method: "GET",
 
@@ -150,7 +256,7 @@ export default function AdminOrdersPage() {
 
       if (response.status === 401) {
 
-      clearAdminCredentials();
+        clearAdminCredentials();
 
         window.location.href =
           "/admin/login";
@@ -188,13 +294,363 @@ export default function AdminOrdersPage() {
   }
 
 
-  // =========================
+  // =========================================================
+  // RECORD PAYMENT RECEIVED
+  // =========================================================
+
+  async function recordPaymentReceived(
+    orderId: number,
+    paymentMethod: ManualPaymentMethod
+  ) {
+          if (!canManageOrders) {
+      setError(
+        "You do not have permission to manage orders."
+      );
+      return;
+    }
+    const order =
+      orders.find(
+        (item) =>
+          item.id === orderId
+      );
+
+    if (!order) {
+      return;
+    }
+
+    if (
+      order.paymentStatus ===
+      "PAID"
+    ) {
+
+      alert(
+        "This order is already marked as PAID."
+      );
+
+      return;
+    }
+
+    const methodLabel =
+      paymentMethod === "COD"
+        ? "Cash / COD"
+        : paymentMethod === "UPI"
+          ? "UPI"
+          : "Online Transfer";
+
+    const confirmed =
+      window.confirm(
+        `Confirm payment received?\n\n` +
+        `Order: #${order.id}\n` +
+        `Amount: ${formatAmount(order.total)}\n` +
+        `Method: ${methodLabel}`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+
+      setProcessingPayment(
+        orderId
+      );
+
+      setError("");
+
+      const credentials =
+        getAdminCredentials();
+
+      if (!credentials) {
+
+        window.location.href =
+          "/admin/login";
+
+        return;
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/admin/orders/${orderId}/payment`,
+          {
+            method: "PUT",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              Authorization:
+                `Basic ${credentials}`,
+            },
+
+            body: JSON.stringify({
+              paymentMethod,
+            }),
+          }
+        );
+
+      if (response.status === 401) {
+
+        clearAdminCredentials();
+
+        window.location.href =
+          "/admin/login";
+
+        return;
+      }
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+            "Unable to record payment."
+        );
+      }
+
+      const updatedOrder =
+        await response.json();
+
+      setOrders(
+        (currentOrders) =>
+          currentOrders.map(
+            (currentOrder) =>
+              currentOrder.id ===
+              updatedOrder.id
+                ? updatedOrder
+                : currentOrder
+          )
+      );
+
+      alert(
+        `Payment received successfully.\n\n` +
+        `Order #${order.id}\n` +
+        `Method: ${methodLabel}\n` +
+        `Amount: ${formatAmount(order.total)}`
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Payment recording failed:",
+        error
+      );
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Unable to record payment."
+      );
+
+    } finally {
+
+      setProcessingPayment(
+        null
+      );
+
+    }
+  }
+
+
+  // =========================================================
+  // PAYMENT METHOD LABEL
+  // =========================================================
+
+  function getPaymentMethodLabel(
+    paymentMethod:
+      | string
+      | null
+      | undefined
+  ) {
+
+    if (!paymentMethod) {
+      return "";
+    }
+
+    const method =
+      paymentMethod
+        .toUpperCase();
+
+    if (method === "COD") {
+      return "Cash / COD";
+    }
+
+    if (method === "UPI") {
+      return "UPI";
+    }
+
+    if (method === "ONLINE") {
+      return "Online Transfer";
+    }
+
+    if (method === "RAZORPAY") {
+      return "Razorpay";
+    }
+
+    return paymentMethod;
+  }
+
+
+  // =========================================================
+  // PAYMENT CONTROLS
+  // =========================================================
+
+  // =========================================================
+// PAYMENT CONTROLS
+// =========================================================
+
+function PaymentControls({
+  order,
+}: {
+  order: Order;
+}) {
+
+  const isProcessing =
+    processingPayment === order.id;
+
+  // ---------------------------------------------------------
+  // ALREADY PAID
+  // ---------------------------------------------------------
+
+  if (order.paymentStatus === "PAID") {
+
+    return (
+      <div className="flex flex-col gap-1">
+
+        <span className="w-fit rounded-full bg-green-500/10 px-3 py-1 text-xs text-green-400">
+          PAID
+        </span>
+
+        {order.paymentMethod && (
+          <span className="text-[11px] uppercase tracking-wide text-white/30">
+            {getPaymentMethodLabel(
+              order.paymentMethod
+            )}
+          </span>
+        )}
+
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------
+  // PAYMENT PENDING
+  // ---------------------------------------------------------
+
+  // Manual payment can ONLY be received after delivery.
+  const canReceivePayment =
+  canManageOrders &&
+  order.orderStatus === "DELIVERED";
+
+  // ---------------------------------------------------------
+  // NOT DELIVERED YET
+  // ---------------------------------------------------------
+
+  if (!canReceivePayment) {
+
+    return (
+      <div className="flex flex-col gap-1">
+
+        <span className="w-fit rounded-full bg-yellow-500/10 px-3 py-1 text-xs text-yellow-400">
+          PENDING
+        </span>
+
+        <span className="text-[11px] text-white/30">
+          Payment after delivery
+        </span>
+
+      </div>
+    );
+  }
+
+  // ---------------------------------------------------------
+  // DELIVERED + PAYMENT PENDING
+  // ---------------------------------------------------------
+
+  return (
+    <div className="flex flex-col gap-2">
+
+      <span className="w-fit rounded-full bg-yellow-500/10 px-3 py-1 text-xs text-yellow-400">
+        PENDING
+      </span>
+
+      <span className="text-[11px] text-white/30">
+        Payment received?
+      </span>
+
+      <div className="flex flex-wrap gap-1">
+
+        {/* CASH / COD */}
+
+        <button
+          type="button"
+          disabled={isProcessing}
+          onClick={() =>
+            recordPaymentReceived(
+              order.id,
+              "COD"
+            )
+          }
+          className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-white/60 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isProcessing
+            ? "..."
+            : "Cash"}
+        </button>
+
+        {/* UPI */}
+
+        <button
+          type="button"
+          disabled={isProcessing}
+          onClick={() =>
+            recordPaymentReceived(
+              order.id,
+              "UPI"
+            )
+          }
+          className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-white/60 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isProcessing
+            ? "..."
+            : "UPI"}
+        </button>
+
+        {/* ONLINE */}
+
+        <button
+          type="button"
+          disabled={isProcessing}
+          onClick={() =>
+            recordPaymentReceived(
+              order.id,
+              "ONLINE"
+            )
+          }
+          className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-white/60 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isProcessing
+            ? "..."
+            : "Online"}
+        </button>
+
+      </div>
+
+    </div>
+  );
+}
+
+  // =========================================================
   // EXPORT CSV
-  // =========================
+  // =========================================================
 
   function exportOrdersToCSV() {
 
-    if (filteredOrders.length === 0) {
+    if (
+      filteredOrders.length ===
+      0
+    ) {
 
       alert(
         "No orders to export."
@@ -217,6 +673,7 @@ export default function AdminOrdersPage() {
       "Delivery Charge",
       "Total",
       "Payment Status",
+      "Payment Method",
       "Order Status",
       "Razorpay Order ID",
       "Razorpay Payment ID",
@@ -240,6 +697,7 @@ export default function AdminOrdersPage() {
           order.deliveryCharge,
           order.total,
           order.paymentStatus,
+          order.paymentMethod,
           order.orderStatus,
           order.razorpayOrderId,
           order.razorpayPaymentId,
@@ -255,7 +713,6 @@ export default function AdminOrdersPage() {
 
     ]
       .map((row) =>
-
         row
           .map((value) => {
 
@@ -269,10 +726,8 @@ export default function AdminOrdersPage() {
 
           })
           .join(",")
-
       )
       .join("\n");
-
 
     const blob =
       new Blob(
@@ -283,41 +738,49 @@ export default function AdminOrdersPage() {
         }
       );
 
-
     const url =
-      URL.createObjectURL(blob);
-
+      URL.createObjectURL(
+        blob
+      );
 
     const link =
-      document.createElement("a");
-
+      document.createElement(
+        "a"
+      );
 
     link.href = url;
-
 
     link.download =
       `vaelis-orders-${new Date()
         .toISOString()
         .slice(0, 10)}.csv`;
 
-
-    document.body.appendChild(link);
+    document.body.appendChild(
+      link
+    );
 
     link.click();
 
-    document.body.removeChild(link);
+    document.body.removeChild(
+      link
+    );
 
-    URL.revokeObjectURL(url);
+    URL.revokeObjectURL(
+      url
+    );
   }
 
 
-  // =========================
+  // =========================================================
   // EXPORT EXCEL
-  // =========================
+  // =========================================================
 
   function exportOrdersToExcel() {
 
-    if (filteredOrders.length === 0) {
+    if (
+      filteredOrders.length ===
+      0
+    ) {
 
       alert(
         "No orders to export."
@@ -325,7 +788,6 @@ export default function AdminOrdersPage() {
 
       return;
     }
-
 
     const excelData =
       filteredOrders.map(
@@ -367,6 +829,9 @@ export default function AdminOrdersPage() {
           "Payment Status":
             order.paymentStatus,
 
+          "Payment Method":
+            order.paymentMethod,
+
           "Order Status":
             order.orderStatus,
 
@@ -382,25 +847,19 @@ export default function AdminOrdersPage() {
         })
       );
 
-
     const worksheet =
       XLSX.utils.json_to_sheet(
         excelData
       );
 
-
     const workbook =
       XLSX.utils.book_new();
-
 
     XLSX.utils.book_append_sheet(
       workbook,
       worksheet,
       "Orders"
     );
-
-
-    // Set useful column widths
 
     worksheet["!cols"] = [
 
@@ -416,13 +875,13 @@ export default function AdminOrdersPage() {
       { wch: 18 },
       { wch: 14 },
       { wch: 16 },
+      { wch: 18 },
       { wch: 16 },
       { wch: 25 },
       { wch: 25 },
       { wch: 24 },
 
     ];
-
 
     XLSX.writeFile(
       workbook,
@@ -432,21 +891,37 @@ export default function AdminOrdersPage() {
     );
   }
 
-
-  // =========================
-  // LOAD ORDERS
-  // =========================
-
   useEffect(() => {
 
-    fetchOrders();
+  loadAdminPermissions();
 
-  }, []);
+}, []);
+
+  // =========================================================
+  // LOAD ORDERS
+  // =========================================================
+
+ useEffect(() => {
+
+  if (permissionsLoading) {
+    return;
+  }
+
+  if (!canViewOrders) {
+    return;
+  }
+
+  fetchOrders();
+
+}, [
+  permissionsLoading,
+  canViewOrders,
+]);
 
 
-  // =========================
+  // =========================================================
   // FILTER ORDERS
-  // =========================
+  // =========================================================
 
   const filteredOrders =
     orders.filter((order) => {
@@ -456,61 +931,67 @@ export default function AdminOrdersPage() {
           .toLowerCase()
           .trim();
 
-
       const matchesSearch =
-  searchText === "" ||
+        searchText === "" ||
 
-  String(order.id)
-    .includes(searchText) ||
+        String(order.id)
+          .includes(searchText) ||
 
-  order.customerName
-    .toLowerCase()
-    .includes(searchText) ||
+        order.customerName
+          .toLowerCase()
+          .includes(searchText) ||
 
-  order.email
-    .toLowerCase()
-    .includes(searchText) ||
+        order.email
+          .toLowerCase()
+          .includes(searchText) ||
 
-  order.phone
-    .includes(searchText) ||
+        order.phone
+          .includes(searchText) ||
 
-  (order.trackingNumber || "")
-    .toLowerCase()
-    .includes(searchText);
+        (
+          order.trackingNumber ||
+          ""
+        )
+          .toLowerCase()
+          .includes(searchText);
 
       const matchesPayment =
         paymentFilter === "ALL" ||
-
         order.paymentStatus ===
           paymentFilter;
 
-
       const matchesStatus =
         statusFilter === "ALL" ||
-
         order.orderStatus ===
           statusFilter;
-        
-          const hasShipment =
-  Boolean(
-    order.shippingPartner ||
-    order.trackingNumber
-  );
 
-const matchesShipment =
-  shipmentFilter === "ALL" ||
+      const hasShipment =
+        Boolean(
+          order.shippingPartner ||
+          order.trackingNumber
+        );
 
-  (shipmentFilter === "SHIPPED" &&
-    hasShipment) ||
+      const matchesShipment =
+        shipmentFilter === "ALL" ||
 
-  (shipmentFilter === "NOT_SHIPPED" &&
-    !hasShipment);
+        (
+          shipmentFilter ===
+          "SHIPPED" &&
+          hasShipment
+        ) ||
 
+        (
+          shipmentFilter ===
+          "NOT_SHIPPED" &&
+          !hasShipment
+        );
 
-      let matchesDate = true;
+      let matchesDate =
+        true;
 
-
-      if (dateFilter !== "ALL") {
+      if (
+        dateFilter !== "ALL"
+      ) {
 
         const orderDate =
           new Date(
@@ -523,7 +1004,6 @@ const matchesShipment =
         const startDate =
           new Date(now);
 
-
         if (
           dateFilter ===
           "TODAY"
@@ -535,9 +1015,7 @@ const matchesShipment =
             0,
             0
           );
-
         }
-
 
         if (
           dateFilter ===
@@ -547,9 +1025,7 @@ const matchesShipment =
           startDate.setDate(
             now.getDate() - 7
           );
-
         }
-
 
         if (
           dateFilter ===
@@ -559,29 +1035,26 @@ const matchesShipment =
           startDate.setDate(
             now.getDate() - 30
           );
-
         }
-
 
         matchesDate =
           orderDate >=
           startDate;
       }
 
-
       return (
-  matchesSearch &&
-  matchesPayment &&
-  matchesStatus &&
-  matchesDate &&
-  matchesShipment
-);
+        matchesSearch &&
+        matchesPayment &&
+        matchesStatus &&
+        matchesDate &&
+        matchesShipment
+      );
     });
 
 
-  // =========================
+  // =========================================================
   // PAGINATION
-  // =========================
+  // =========================================================
 
   const totalPages =
     Math.max(
@@ -592,11 +1065,9 @@ const matchesShipment =
       )
     );
 
-
   const startIndex =
     (currentPage - 1) *
     ordersPerPage;
-
 
   const paginatedOrders =
     filteredOrders.slice(
@@ -625,9 +1096,9 @@ const matchesShipment =
   ]);
 
 
-  // =========================
+  // =========================================================
   // FORMAT DATE
-  // =========================
+  // =========================================================
 
   function formatDate(
     date: string
@@ -638,16 +1109,19 @@ const matchesShipment =
     ).toLocaleString(
       "en-IN",
       {
-        dateStyle: "medium",
-        timeStyle: "short",
+        dateStyle:
+          "medium",
+
+        timeStyle:
+          "short",
       }
     );
   }
 
 
-  // =========================
+  // =========================================================
   // FORMAT AMOUNT
-  // =========================
+  // =========================================================
 
   function formatAmount(
     amount: number
@@ -659,35 +1133,92 @@ const matchesShipment =
   }
 
 
-  // =========================
+  // =========================================================
   // RESET FILTERS
-  // =========================
+  // =========================================================
 
   function resetFilters() {
 
     setSearch("");
 
-    setPaymentFilter("ALL");
+    setPaymentFilter(
+      "ALL"
+    );
 
-    setStatusFilter("ALL");
+    setStatusFilter(
+      "ALL"
+    );
 
-    setDateFilter("ALL");
-    
-    setShipmentFilter("ALL");
+    setDateFilter(
+      "ALL"
+    );
+
+    setShipmentFilter(
+      "ALL"
+    );
 
     setCurrentPage(1);
   }
 
 
-  // =========================
+  // =========================================================
   // PAGE
-  // =========================
+  // =========================================================
 
+  // =========================================================
+// PAGE ACCESS PROTECTION
+// =========================================================
+
+if (permissionsLoading) {
   return (
-
     <main className="min-h-screen bg-[#050505] text-white">
+      <section className="mx-auto max-w-7xl px-6 py-20">
+        <div className="rounded-3xl border border-white/10 bg-white/[0.03] px-6 py-16 text-center">
+          <RefreshCw
+            size={24}
+            className="mx-auto mb-4 animate-spin text-white/40"
+          />
 
-      {/* PAGE HEADER */}
+          <p className="text-sm text-white/40">
+            Checking order permissions...
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+if (!canViewOrders) {
+  return (
+    <main className="min-h-screen bg-[#050505] text-white">
+      <section className="mx-auto max-w-7xl px-6 py-20">
+        <div className="rounded-3xl border border-red-500/20 bg-red-500/5 px-6 py-16 text-center">
+
+          <div className="mb-4 text-4xl">
+            🔒
+          </div>
+
+          <h1 className="text-xl font-medium text-white">
+            Access Denied
+          </h1>
+
+          <p className="mt-2 text-sm text-white/40">
+            You do not have permission to view orders.
+          </p>
+
+        </div>
+      </section>
+    </main>
+  );
+}
+
+return (
+
+  <main className="min-h-screen bg-[#050505] text-white">
+    
+      {/* =====================================================
+          PAGE HEADER
+          ===================================================== */}
 
       <section className="mx-auto max-w-7xl px-6 pt-10">
 
@@ -705,7 +1236,6 @@ const matchesShipment =
 
           </div>
 
-
           <div className="flex flex-wrap items-center gap-3">
 
             {/* EXPORT CSV */}
@@ -719,7 +1249,6 @@ const matchesShipment =
               Export CSV
             </button>
 
-
             {/* EXPORT EXCEL */}
 
             <button
@@ -730,7 +1259,6 @@ const matchesShipment =
             >
               Export Excel
             </button>
-
 
             {/* REFRESH */}
 
@@ -764,10 +1292,11 @@ const matchesShipment =
       </section>
 
 
-      {/* CONTENT */}
+      {/* =====================================================
+          CONTENT
+          ===================================================== */}
 
       <section className="mx-auto max-w-7xl px-6 py-8">
-
 
         {/* ERROR */}
 
@@ -782,12 +1311,13 @@ const matchesShipment =
         )}
 
 
-        {/* SEARCH & FILTERS */}
+        {/* ===================================================
+            SEARCH & FILTERS
+            =================================================== */}
 
         <div className="mb-6 rounded-3xl border border-white/10 bg-white/[0.03] p-5">
 
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-
 
             {/* SEARCH */}
 
@@ -926,35 +1456,38 @@ const matchesShipment =
 
             </select>
 
+
             {/* SHIPMENT */}
 
-<select
-  value={shipmentFilter}
-  onChange={(e) => {
+            <select
+              value={
+                shipmentFilter
+              }
+              onChange={(e) => {
 
-    setShipmentFilter(
-      e.target.value
-    );
+                setShipmentFilter(
+                  e.target.value
+                );
 
-    setCurrentPage(1);
+                setCurrentPage(1);
 
-  }}
-  className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none"
->
+              }}
+              className="rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none"
+            >
 
-  <option value="ALL">
-    All Shipments
-  </option>
+              <option value="ALL">
+                All Shipments
+              </option>
 
-  <option value="SHIPPED">
-    Shipment Added
-  </option>
+              <option value="SHIPPED">
+                Shipment Added
+              </option>
 
-  <option value="NOT_SHIPPED">
-    Shipment Pending
-  </option>
+              <option value="NOT_SHIPPED">
+                Shipment Pending
+              </option>
 
-</select>
+            </select>
 
 
             {/* RESET */}
@@ -986,10 +1519,11 @@ const matchesShipment =
         </div>
 
 
-        {/* ORDERS */}
+        {/* ===================================================
+            ORDERS
+            =================================================== */}
 
         <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03]">
-
 
           {loading ? (
 
@@ -1007,7 +1541,9 @@ const matchesShipment =
 
             <>
 
-              {/* DESKTOP TABLE */}
+              {/* =================================================
+                  DESKTOP TABLE
+                  ================================================= */}
 
               <div className="hidden overflow-x-auto md:block">
 
@@ -1036,9 +1572,10 @@ const matchesShipment =
                       <th className="px-5 py-4">
                         Status
                       </th>
-                        <th className="px-5 py-4">
-                          Shipment
-                        </th>
+
+                      <th className="px-5 py-4">
+                        Shipment
+                      </th>
 
                       <th className="px-5 py-4">
                         Date
@@ -1062,6 +1599,8 @@ const matchesShipment =
                           className="transition hover:bg-white/[0.03]"
                         >
 
+                          {/* ORDER */}
+
                           <td className="px-5 py-5">
 
                             <Link
@@ -1073,6 +1612,8 @@ const matchesShipment =
 
                           </td>
 
+
+                          {/* CUSTOMER */}
 
                           <td className="px-5 py-5">
 
@@ -1087,6 +1628,8 @@ const matchesShipment =
                           </td>
 
 
+                          {/* TOTAL */}
+
                           <td className="px-5 py-5 font-medium">
 
                             {formatAmount(
@@ -1096,21 +1639,18 @@ const matchesShipment =
                           </td>
 
 
+                          {/* PAYMENT */}
+
                           <td className="px-5 py-5">
 
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs ${
-                                order.paymentStatus ===
-                                "PAID"
-                                  ? "bg-green-500/10 text-green-400"
-                                  : "bg-yellow-500/10 text-yellow-400"
-                              }`}
-                            >
-                              {order.paymentStatus}
-                            </span>
+                            <PaymentControls
+                              order={order}
+                            />
 
                           </td>
 
+
+                          {/* STATUS */}
 
                           <td className="px-5 py-5">
 
@@ -1119,33 +1659,40 @@ const matchesShipment =
                             </span>
 
                           </td>
-                              <td className="px-5 py-5">
 
-                             {order.shippingPartner ||
+
+                          {/* SHIPMENT */}
+
+                          <td className="px-5 py-5">
+
+                            {order.shippingPartner ||
                             order.trackingNumber ? (
 
-                         <div>
+                              <div>
 
-                        <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs text-cyan-400">
-                         🚚 Shipment Added
-                         </span>
+                                <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs text-cyan-400">
+                                  🚚 Shipment Added
+                                </span>
 
-                          <p className="mt-2 text-xs text-white/30">
-                          {order.shippingPartner ||
-                          "Tracking available"}
-                          </p>
+                                <p className="mt-2 text-xs text-white/30">
+                                  {order.shippingPartner ||
+                                    "Tracking available"}
+                                </p>
 
-                        </div>
+                              </div>
 
-                          ) :                     
-                          (<span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/30">
-                          Shipment Pending
-                            </span>
+                            ) : (
 
-                           )}
+                              <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/30">
+                                Shipment Pending
+                              </span>
+
+                            )}
 
                           </td>
 
+
+                          {/* DATE */}
 
                           <td className="px-5 py-5 text-sm text-white/40">
 
@@ -1156,15 +1703,19 @@ const matchesShipment =
                           </td>
 
 
+                          {/* VIEW */}
+
                           <td className="px-5 py-5">
 
                             <Link
                               href={`/admin/orders/${order.id}`}
                               className="text-white/40 transition hover:text-white"
                             >
+
                               <ArrowRight
                                 size={18}
                               />
+
                             </Link>
 
                           </td>
@@ -1181,75 +1732,184 @@ const matchesShipment =
               </div>
 
 
-              {/* MOBILE */}
+              {/* =================================================
+                  MOBILE
+                  ================================================= */}
 
               <div className="divide-y divide-white/10 md:hidden">
 
                 {paginatedOrders.map(
                   (order) => (
 
-                    <Link
+                    <div
                       key={order.id}
-                      href={`/admin/orders/${order.id}`}
-                      className="block p-5 transition hover:bg-white/[0.03]"
+                      className="p-5 transition hover:bg-white/[0.03]"
                     >
 
-                      <div className="flex items-start justify-between">
+                      <Link
+                        href={`/admin/orders/${order.id}`}
+                        className="block"
+                      >
 
-                        <div>
+                        <div className="flex items-start justify-between">
 
-                          <p className="font-medium">
-                            Order #{order.id}
-                          </p>
+                          <div>
 
-                          <p className="mt-1 text-sm text-white/50">
-                            {order.customerName}
-                          </p>
+                            <p className="font-medium">
+                              Order #{order.id}
+                            </p>
+
+                            <p className="mt-1 text-sm text-white/50">
+                              {order.customerName}
+                            </p>
+
+                          </div>
+
+                          <ArrowRight
+                            size={18}
+                            className="text-white/30"
+                          />
 
                         </div>
 
-
-                        <ArrowRight
-                          size={18}
-                          className="text-white/30"
-                        />
-
-                      </div>
+                      </Link>
 
 
                       <div className="mt-4 flex flex-wrap items-center gap-2">
-                          {order.shippingPartner ||
-                          order.trackingNumber ? (
+
+                        {order.shippingPartner ||
+                        order.trackingNumber ? (
 
                           <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs text-cyan-400">
-                          🚚 Shipment Added
+                            🚚 Shipment Added
                           </span>
 
                         ) : (
 
-                        <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/30">
-                        Shipment Pending
-                        </span>
+                          <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/30">
+                            Shipment Pending
+                          </span>
 
-                          )}
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs ${
-                            order.paymentStatus ===
-                            "PAID"
-                              ? "bg-green-500/10 text-green-400"
-                              : "bg-yellow-500/10 text-yellow-400"
-                              
-                            }`}
-                        >
-                          {order.paymentStatus}
-                        </span>
+                        )}
 
+                        {order.paymentStatus ===
+                        "PAID" ? (
+
+                          <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs text-green-400">
+                            PAID
+                          </span>
+
+                        ) : (
+
+                          <span className="rounded-full bg-yellow-500/10 px-3 py-1 text-xs text-yellow-400">
+                            PENDING
+                          </span>
+
+                        )}
 
                         <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-white/60">
                           {order.orderStatus}
                         </span>
 
                       </div>
+
+
+                      {/* MOBILE PAYMENT METHOD */}
+
+                      {order.paymentStatus ===
+                        "PAID" &&
+                        order.paymentMethod && (
+
+                          <div className="mt-2 text-xs text-white/30">
+                            Payment:{" "}
+                            {getPaymentMethodLabel(
+                              order.paymentMethod
+                            )}
+                          </div>
+
+                        )}
+                        {/* MOBILE PAYMENT BUTTONS */}
+
+{canManageOrders &&
+  order.paymentStatus !== "PAID" &&
+  order.orderStatus === "DELIVERED" && (
+
+    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
+
+      <p className="mb-2 text-xs text-white/40">
+        Record Payment Received
+      </p>
+
+      <p className="mb-3 text-[11px] text-white/30">
+        Order delivered. Confirm the payment method received.
+      </p>
+
+      <div className="flex flex-wrap gap-2">
+
+        {/* CASH / COD */}
+
+        <button
+          type="button"
+          disabled={
+            processingPayment ===
+            order.id
+          }
+          onClick={() =>
+            recordPaymentReceived(
+              order.id,
+              "COD"
+            )
+          }
+          className="rounded-xl border border-white/10 px-3 py-2 text-xs text-white/70 transition hover:bg-white/10 disabled:opacity-40"
+        >
+          Cash / COD
+        </button>
+
+        {/* UPI */}
+
+        <button
+          type="button"
+          disabled={
+            processingPayment ===
+            order.id
+          }
+          onClick={() =>
+            recordPaymentReceived(
+              order.id,
+              "UPI"
+            )
+          }
+          className="rounded-xl border border-white/10 px-3 py-2 text-xs text-white/70 transition hover:bg-white/10 disabled:opacity-40"
+        >
+          UPI
+        </button>
+
+        {/* ONLINE */}
+
+        <button
+          type="button"
+          disabled={
+            processingPayment ===
+            order.id
+          }
+          onClick={() =>
+            recordPaymentReceived(
+              order.id,
+              "ONLINE"
+            )
+          }
+          className="rounded-xl border border-white/10 px-3 py-2 text-xs text-white/70 transition hover:bg-white/10 disabled:opacity-40"
+        >
+          Online
+        </button>
+
+      </div>
+
+    </div>
+
+)}
+
+
 
 
                       <div className="mt-4 flex items-center justify-between">
@@ -1268,7 +1928,7 @@ const matchesShipment =
 
                       </div>
 
-                    </Link>
+                    </div>
 
                   )
                 )}
@@ -1276,7 +1936,9 @@ const matchesShipment =
               </div>
 
 
-              {/* PAGINATION */}
+              {/* =================================================
+                  PAGINATION
+                  ================================================= */}
 
               {filteredOrders.length > 0 && (
 
