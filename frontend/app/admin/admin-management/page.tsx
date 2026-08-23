@@ -1001,8 +1001,10 @@ export default function AdminManagementPage() {
 
                         {/* PERMISSIONS */}
 
-                        {admin.role.toUpperCase() ===
-                          "ADMIN" && (
+                       {(
+                        admin.role.toUpperCase() === "ADMIN" ||
+                        admin.role.toUpperCase() === "ACCOUNT_MANAGER"
+                        ) && (
                           <button
                             type="button"
                             onClick={() =>
@@ -1211,14 +1213,19 @@ export default function AdminManagementPage() {
                               ) : (
                                 <div className="grid gap-3 md:grid-cols-2">
 
-                                  {permissions
-                                    .filter(
-                                      (
-                                        permission
-                                      ) =>
-                                        permission.enabled
-                                    )
-                                    .map(
+                                 {permissions
+                                .filter(
+                                (permission) =>
+                                permission.enabled &&
+                              (
+                                  admin.role.toUpperCase() !==
+                                  "ACCOUNT_MANAGER" ||
+                                    permission.code
+                                  .toUpperCase()
+                                  .startsWith("ACCOUNT_USERS_")
+                              )
+                              )
+                                  .map(
                                       (
                                         permission
                                       ) => {
