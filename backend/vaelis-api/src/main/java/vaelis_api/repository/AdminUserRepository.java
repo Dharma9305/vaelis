@@ -62,7 +62,12 @@ public interface AdminUserRepository
     findByRoleIgnoreCaseAndApprovedFalseAndDeletedFalseOrderByCreatedAtDesc(
             String role
     );
+// =========================================================
+// PENDING DELETION REQUESTS
+// =========================================================
 
+List<AdminUser>
+findByDeletionPendingTrueAndDeletedFalseOrderByDeletionRequestedAtDesc();
     // =========================================================
     // APPROVED ACCOUNT MANAGERS
     // =========================================================

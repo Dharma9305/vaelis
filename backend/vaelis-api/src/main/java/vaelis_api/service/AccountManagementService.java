@@ -9,6 +9,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 @Service
 public class AccountManagementService {
 
@@ -29,17 +32,6 @@ public class AccountManagementService {
 
     // =========================================================
     // CREATE ACCOUNT MANAGER
-    // =========================================================
-    //
-    // This operation is intentionally limited to the service
-    // layer. The controller will enforce SUPER_ADMIN access.
-    //
-    // Newly created ACCOUNT_MANAGER:
-    //
-    // approved = false
-    // enabled  = false
-    //
-    // Super Admin must explicitly approve the account.
     // =========================================================
 
     @Transactional
@@ -68,10 +60,6 @@ public class AccountManagementService {
                         ? ""
                         : request.getPassword();
 
-        // =====================================================
-        // VALIDATE USERNAME
-        // =====================================================
-
         if (username.isBlank()) {
 
             throw new IllegalArgumentException(
@@ -79,20 +67,12 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // VALIDATE EMAIL
-        // =====================================================
-
         if (email.isBlank()) {
 
             throw new IllegalArgumentException(
                     "Email is required."
             );
         }
-
-        // =====================================================
-        // VALIDATE PASSWORD
-        // =====================================================
 
         if (password.isBlank()) {
 
@@ -108,10 +88,6 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // DUPLICATE USERNAME
-        // =====================================================
-
         if (adminUserRepository
                 .findByUsernameIgnoreCase(username)
                 .isPresent()) {
@@ -121,10 +97,6 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // DUPLICATE EMAIL
-        // =====================================================
-
         if (adminUserRepository
                 .findByEmailIgnoreCase(email)
                 .isPresent()) {
@@ -133,10 +105,6 @@ public class AccountManagementService {
                     "Email is already registered."
             );
         }
-
-        // =====================================================
-        // CREATE ACCOUNT
-        // =====================================================
 
         AdminUser accountManager =
                 new AdminUser();
@@ -149,27 +117,15 @@ public class AccountManagementService {
                 email
         );
 
-        // =====================================================
-        // NEVER STORE PLAIN-TEXT PASSWORD
-        // =====================================================
-
         accountManager.setPassword(
                 passwordEncoder.encode(
                         password
                 )
         );
 
-        // =====================================================
-        // FORCE ACCOUNT MANAGER ROLE
-        // =====================================================
-
         accountManager.setRole(
                 AdminRoles.ACCOUNT_MANAGER
         );
-
-        // =====================================================
-        // REQUIRE SUPER ADMIN APPROVAL
-        // =====================================================
 
         accountManager.setApproved(
                 false
@@ -183,17 +139,9 @@ public class AccountManagementService {
                 null
         );
 
-        // =====================================================
-        // DISABLED UNTIL APPROVED
-        // =====================================================
-
         accountManager.setEnabled(
                 false
         );
-
-        // =====================================================
-        // SAVE
-        // =====================================================
 
         return adminUserRepository.save(
                 accountManager
@@ -205,7 +153,7 @@ public class AccountManagementService {
     // =========================================================
 
     @Transactional(readOnly = true)
-    public java.util.List<AdminUser>
+    public List<AdminUser>
     getManageableUsers(
             String currentUsername) {
 
@@ -241,20 +189,6 @@ public class AccountManagementService {
     // =========================================================
     // CREATE MANAGEABLE USER ACCOUNT
     // =========================================================
-    //
-    // ACCOUNT_MANAGER may create:
-    //     ADMIN
-    //     EMPLOYEE
-    //
-    // ACCOUNT_MANAGER may NEVER create:
-    //     SUPER_ADMIN
-    //     ACCOUNT_MANAGER
-    //
-    // Newly created accounts require Super Admin approval.
-    //
-    // approved = false
-    // enabled  = false
-    // =========================================================
 
     @Transactional
     public AdminUser createUserAccount(
@@ -268,18 +202,10 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // NORMALIZE ROLE
-        // =====================================================
-
         String requestedRole =
                 role == null
                         ? ""
                         : role.trim();
-
-        // =====================================================
-        // ROLE VALIDATION
-        // =====================================================
 
         if (requestedRole.isBlank()) {
 
@@ -300,10 +226,6 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // USERNAME
-        // =====================================================
-
         String username =
                 request.getUsername() == null
                         ? ""
@@ -316,10 +238,6 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // EMAIL
-        // =====================================================
-
         String email =
                 request.getEmail() == null
                         ? ""
@@ -331,10 +249,6 @@ public class AccountManagementService {
                     "Email is required."
             );
         }
-
-        // =====================================================
-        // PASSWORD
-        // =====================================================
 
         String password =
                 request.getPassword() == null
@@ -355,10 +269,6 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // DUPLICATE USERNAME
-        // =====================================================
-
         if (adminUserRepository
                 .findByUsernameIgnoreCase(username)
                 .isPresent()) {
@@ -368,10 +278,6 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // DUPLICATE EMAIL
-        // =====================================================
-
         if (adminUserRepository
                 .findByEmailIgnoreCase(email)
                 .isPresent()) {
@@ -380,10 +286,6 @@ public class AccountManagementService {
                     "Email is already registered."
             );
         }
-
-        // =====================================================
-        // CREATE USER
-        // =====================================================
 
         AdminUser user =
                 new AdminUser();
@@ -396,27 +298,15 @@ public class AccountManagementService {
                 email
         );
 
-        // =====================================================
-        // NEVER STORE PLAIN-TEXT PASSWORD
-        // =====================================================
-
         user.setPassword(
                 passwordEncoder.encode(
                         password
                 )
         );
 
-        // =====================================================
-        // SAFE ROLE
-        // =====================================================
-
         user.setRole(
                 requestedRole.toUpperCase()
         );
-
-        // =====================================================
-        // SUPER ADMIN APPROVAL REQUIRED
-        // =====================================================
 
         user.setApproved(
                 false
@@ -430,17 +320,9 @@ public class AccountManagementService {
                 null
         );
 
-        // =====================================================
-        // DISABLED UNTIL APPROVED
-        // =====================================================
-
         user.setEnabled(
                 false
         );
-
-        // =====================================================
-        // SAVE
-        // =====================================================
 
         return adminUserRepository.save(
                 user
@@ -449,21 +331,6 @@ public class AccountManagementService {
 
     // =========================================================
     // UPDATE MANAGEABLE USER ACCOUNT
-    // =========================================================
-    //
-    // Account Manager can update:
-    //     username
-    //     email
-    //
-    // Account Manager CANNOT change:
-    //     role
-    //     password
-    //     approved
-    //     enabled
-    //     permissions
-    //
-    // SUPER_ADMIN accounts are never manageable here.
-    // The current Account Manager cannot modify itself.
     // =========================================================
 
     @Transactional
@@ -479,18 +346,10 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // CURRENT USER
-        // =====================================================
-
         String currentUser =
                 currentUsername == null
                         ? ""
                         : currentUsername.trim();
-
-        // =====================================================
-        // FIND TARGET
-        // =====================================================
 
         AdminUser user =
                 adminUserRepository
@@ -501,20 +360,23 @@ public class AccountManagementService {
                                 )
                         );
 
-        // =====================================================
-        // DELETED ACCOUNT PROTECTION
-        // =====================================================
-
         if (user.isDeleted()) {
 
             throw new IllegalStateException(
                     "Deleted user accounts cannot be modified."
             );
         }
+        
+        // =====================================================
+        // DELETION REQUEST FREEZE
+        // =====================================================
 
-        // =====================================================
-        // NEVER MODIFY SUPER ADMIN
-        // =====================================================
+        if (user.isDeletionPending()) {
+
+            throw new IllegalStateException(
+                    "User account is frozen because a deletion request is pending Super Admin approval."
+            );
+        }
 
         if (AdminRoles.SUPER_ADMIN.equalsIgnoreCase(
                 user.getRole()
@@ -525,10 +387,6 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // PREVENT SELF-MODIFICATION
-        // =====================================================
-
         if (user.getUsername() != null &&
                 user.getUsername()
                         .equalsIgnoreCase(currentUser)) {
@@ -537,10 +395,6 @@ public class AccountManagementService {
                     "You cannot modify your own account."
             );
         }
-
-        // =====================================================
-        // USERNAME
-        // =====================================================
 
         String username =
                 request.getUsername() == null
@@ -554,10 +408,6 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // EMAIL
-        // =====================================================
-
         String email =
                 request.getEmail() == null
                         ? ""
@@ -569,10 +419,6 @@ public class AccountManagementService {
                     "Email is required."
             );
         }
-
-        // =====================================================
-        // DUPLICATE USERNAME
-        // =====================================================
 
         adminUserRepository
                 .findByUsernameIgnoreCase(username)
@@ -587,10 +433,6 @@ public class AccountManagementService {
                     }
                 });
 
-        // =====================================================
-        // DUPLICATE EMAIL
-        // =====================================================
-
         adminUserRepository
                 .findByEmailIgnoreCase(email)
                 .ifPresent(existingUser -> {
@@ -604,10 +446,6 @@ public class AccountManagementService {
                     }
                 });
 
-        // =====================================================
-        // UPDATE ONLY PROFILE FIELDS
-        // =====================================================
-
         user.setUsername(
                 username
         );
@@ -616,19 +454,6 @@ public class AccountManagementService {
                 email
         );
 
-        // =====================================================
-        // IMPORTANT:
-        // Do NOT modify:
-        //
-        // password
-        // role
-        // approved
-        // approvedBy
-        // approvedAt
-        // enabled
-        // permissions
-        // =====================================================
-
         return adminUserRepository.save(
                 user
         );
@@ -636,17 +461,6 @@ public class AccountManagementService {
 
     // =========================================================
     // DISABLE USER ACCOUNT
-    // =========================================================
-    //
-    // Account Manager requires:
-    //     ACCOUNT_USERS_DISABLE
-    //
-    // Cannot disable:
-    //     - itself
-    //     - SUPER_ADMIN
-    //     - deleted account
-    //
-    // Approval state is preserved.
     // =========================================================
 
     @Transactional
@@ -668,10 +482,6 @@ public class AccountManagementService {
                                 )
                         );
 
-        // =====================================================
-        // DELETED ACCOUNT PROTECTION
-        // =====================================================
-
         if (user.isDeleted()) {
 
             throw new IllegalStateException(
@@ -680,8 +490,15 @@ public class AccountManagementService {
         }
 
         // =====================================================
-        // NEVER DISABLE SUPER ADMIN
+        // DELETION REQUEST FREEZE
         // =====================================================
+
+        if (user.isDeletionPending()) {
+
+            throw new IllegalStateException(
+                    "User account is frozen because a deletion request is pending Super Admin approval."
+            );
+        }
 
         if (AdminRoles.SUPER_ADMIN.equalsIgnoreCase(
                 user.getRole()
@@ -692,10 +509,6 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // PREVENT SELF-DISABLE
-        // =====================================================
-
         if (user.getUsername() != null &&
                 user.getUsername()
                         .equalsIgnoreCase(currentUser)) {
@@ -704,10 +517,6 @@ public class AccountManagementService {
                     "You cannot disable your own account."
             );
         }
-
-        // =====================================================
-        // DISABLE
-        // =====================================================
 
         user.setEnabled(false);
 
@@ -718,16 +527,6 @@ public class AccountManagementService {
 
     // =========================================================
     // ENABLE USER ACCOUNT
-    // =========================================================
-    //
-    // Account Manager requires:
-    //     ACCOUNT_USERS_ENABLE
-    //
-    // Cannot enable:
-    //     - SUPER_ADMIN
-    //     - deleted account
-    //
-    // An account MUST be approved before enabling.
     // =========================================================
 
     @Transactional
@@ -743,10 +542,6 @@ public class AccountManagementService {
                                 )
                         );
 
-        // =====================================================
-        // DELETED ACCOUNT PROTECTION
-        // =====================================================
-
         if (user.isDeleted()) {
 
             throw new IllegalStateException(
@@ -755,8 +550,15 @@ public class AccountManagementService {
         }
 
         // =====================================================
-        // NEVER ENABLE SUPER ADMIN
+        // DELETION REQUEST FREEZE
         // =====================================================
+
+        if (user.isDeletionPending()) {
+
+            throw new IllegalStateException(
+                    "User account is frozen because a deletion request is pending Super Admin approval."
+            );
+        }
 
         if (AdminRoles.SUPER_ADMIN.equalsIgnoreCase(
                 user.getRole()
@@ -767,20 +569,12 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // APPROVAL REQUIRED
-        // =====================================================
-
         if (!user.isApproved()) {
 
             throw new IllegalStateException(
                     "Account must be approved before it can be enabled."
             );
         }
-
-        // =====================================================
-        // ENABLE
-        // =====================================================
 
         user.setEnabled(true);
 
@@ -791,18 +585,6 @@ public class AccountManagementService {
 
     // =========================================================
     // CHANGE USER PASSWORD
-    // =========================================================
-    //
-    // Account Manager requires:
-    //     ACCOUNT_USERS_PASSWORD
-    //
-    // Cannot change:
-    //     - itself
-    //     - SUPER_ADMIN
-    //     - deleted account
-    //
-    // Only the password is changed.
-    // approved/enabled/role remain untouched.
     // =========================================================
 
     @Transactional
@@ -815,10 +597,6 @@ public class AccountManagementService {
                 currentUsername == null
                         ? ""
                         : currentUsername.trim();
-
-        // =====================================================
-        // VALIDATE PASSWORD
-        // =====================================================
 
         String password =
                 newPassword == null
@@ -839,10 +617,6 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // FIND TARGET ACCOUNT
-        // =====================================================
-
         AdminUser user =
                 adminUserRepository
                         .findById(userId)
@@ -852,10 +626,6 @@ public class AccountManagementService {
                                 )
                         );
 
-        // =====================================================
-        // DELETED ACCOUNT PROTECTION
-        // =====================================================
-
         if (user.isDeleted()) {
 
             throw new IllegalStateException(
@@ -864,8 +634,15 @@ public class AccountManagementService {
         }
 
         // =====================================================
-        // NEVER MODIFY SUPER ADMIN
+        // DELETION REQUEST FREEZE
         // =====================================================
+
+        if (user.isDeletionPending()) {
+
+            throw new IllegalStateException(
+                    "User account is frozen because a deletion request is pending Super Admin approval."
+            );
+        }
 
         if (AdminRoles.SUPER_ADMIN.equalsIgnoreCase(
                 user.getRole()
@@ -876,10 +653,6 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // PREVENT SELF PASSWORD CHANGE
-        // =====================================================
-
         if (user.getUsername() != null &&
                 user.getUsername()
                         .equalsIgnoreCase(currentUser)) {
@@ -889,38 +662,44 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // UPDATE PASSWORD
-        // =====================================================
-
         user.setPassword(
                 passwordEncoder.encode(
                         password
                 )
         );
 
-        // =====================================================
-        // SAVE
-        // =====================================================
-
         return adminUserRepository.save(
                 user
         );
     }
+    // =========================================================
+// GET PENDING DELETION REQUESTS
+// =========================================================
+
+@Transactional(readOnly = true)
+public List<AdminUser>
+getPendingDeletionRequests() {
+
+    return adminUserRepository
+            .findByDeletionPendingTrueAndDeletedFalseOrderByDeletionRequestedAtDesc();
+}
 
     // =========================================================
-    // SOFT DELETE USER ACCOUNT
+    // REQUEST USER ACCOUNT DELETION
     // =========================================================
     //
-    // Account Manager requires:
-    //     ACCOUNT_USERS_DELETE
+    // IMPORTANT:
     //
-    // Cannot delete:
-    //     - itself
-    //     - SUPER_ADMIN
-    //     - already deleted account
+    // Account Manager does NOT immediately delete the account.
     //
-    // Physical database row is preserved.
+    // Instead:
+    //
+    // deletionPending = true
+    // deleted         = false
+    // enabled         = false
+    //
+    // The account is therefore frozen until Super Admin
+    // approves or rejects the deletion request.
     // =========================================================
 
     @Transactional
@@ -933,10 +712,6 @@ public class AccountManagementService {
                         ? ""
                         : currentUsername.trim();
 
-        // =====================================================
-        // FIND TARGET
-        // =====================================================
-
         AdminUser user =
                 adminUserRepository
                         .findById(userId)
@@ -945,7 +720,7 @@ public class AccountManagementService {
                                         "User account not found."
                                 )
                         );
-
+                        
         // =====================================================
         // ALREADY DELETED
         // =====================================================
@@ -954,6 +729,17 @@ public class AccountManagementService {
 
             throw new IllegalStateException(
                     "User account is already deleted."
+            );
+        }
+
+        // =====================================================
+        // ALREADY PENDING
+        // =====================================================
+
+        if (user.isDeletionPending()) {
+
+            throw new IllegalStateException(
+                    "A deletion request is already pending Super Admin approval."
             );
         }
 
@@ -984,17 +770,218 @@ public class AccountManagementService {
         }
 
         // =====================================================
-        // SOFT DELETE
+        // REMEMBER PREVIOUS ENABLED STATE
         // =====================================================
 
-        user.setDeleted(true);
-
-        // Deleted accounts must not remain enabled.
-        user.setEnabled(false);
+        user.setDeletionPreviousEnabled(
+                user.isEnabled()
+        );
 
         // =====================================================
-        // SAVE
+        // CREATE DELETION REQUEST
         // =====================================================
+
+        user.setDeletionPending(
+                true
+        );
+
+        user.setDeletionRequestedBy(
+                currentUser
+        );
+
+        user.setDeletionRequestedAt(
+                LocalDateTime.now()
+        );
+
+        // =====================================================
+        // FREEZE ACCOUNT
+        // =====================================================
+
+        user.setEnabled(
+                false
+        );
+
+        // =====================================================
+        // IMPORTANT:
+        // DO NOT SOFT DELETE YET
+        // =====================================================
+
+        user.setDeleted(
+                false
+        );
+
+        return adminUserRepository.save(
+                user
+        );
+    }
+
+    // =========================================================
+    // APPROVE DELETION REQUEST
+    // =========================================================
+    //
+    // SUPER ADMIN only.
+    //
+    // This is the point where the actual soft delete occurs.
+    // =========================================================
+
+    @Transactional
+    public AdminUser approveDeletionRequest(
+            Long userId,
+            String superAdminUsername) {
+
+        String approver =
+                superAdminUsername == null
+                        ? ""
+                        : superAdminUsername.trim();
+
+        AdminUser user =
+                adminUserRepository
+                        .findById(userId)
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "User account not found."
+                                )
+                        );
+
+        if (!user.isDeletionPending()) {
+
+            throw new IllegalStateException(
+                    "No pending deletion request exists for this account."
+            );
+        }
+
+        if (user.isDeleted()) {
+
+            throw new IllegalStateException(
+                    "User account is already deleted."
+            );
+        }
+
+        // =====================================================
+        // APPROVE DELETION
+        // =====================================================
+
+        user.setDeletionPending(
+                false
+        );
+
+        user.setDeletionApprovedBy(
+                approver
+        );
+
+        user.setDeletionApprovedAt(
+                LocalDateTime.now()
+        );
+
+        // =====================================================
+        // ACTUAL SOFT DELETE
+        // =====================================================
+
+        user.setDeleted(
+                true
+        );
+
+        user.setEnabled(
+                false
+        );
+
+        return adminUserRepository.save(
+                user
+        );
+    }
+
+    // =========================================================
+    // REJECT DELETION REQUEST
+    // =========================================================
+    //
+    // SUPER ADMIN only.
+    //
+    // A rejection reason is mandatory.
+    //
+    // The account returns to the enabled/disabled state that
+    // existed before the deletion request.
+    // =========================================================
+
+    @Transactional
+    public AdminUser rejectDeletionRequest(
+            Long userId,
+            String superAdminUsername,
+            String reason) {
+
+        String approver =
+                superAdminUsername == null
+                        ? ""
+                        : superAdminUsername.trim();
+
+        String rejectionReason =
+                reason == null
+                        ? ""
+                        : reason.trim();
+
+        if (rejectionReason.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "A rejection reason is required."
+            );
+        }
+
+        if (rejectionReason.length() > 1000) {
+
+            throw new IllegalArgumentException(
+                    "Rejection reason cannot exceed 1000 characters."
+            );
+        }
+
+        AdminUser user =
+                adminUserRepository
+                        .findById(userId)
+                        .orElseThrow(() ->
+                                new IllegalArgumentException(
+                                        "User account not found."
+                                )
+                        );
+
+        if (!user.isDeletionPending()) {
+
+            throw new IllegalStateException(
+                    "No pending deletion request exists for this account."
+            );
+        }
+
+        if (user.isDeleted()) {
+
+            throw new IllegalStateException(
+                    "Deleted user accounts cannot have their deletion request rejected."
+            );
+        }
+
+        // =====================================================
+        // REJECT DELETION
+        // =====================================================
+
+        user.setDeletionPending(
+                false
+        );
+
+        user.setDeletionRejectedBy(
+                approver
+        );
+
+        user.setDeletionRejectedAt(
+                LocalDateTime.now()
+        );
+
+        user.setDeletionRejectionReason(
+                rejectionReason
+        );
+
+        // =====================================================
+        // RESTORE PREVIOUS ENABLED STATE
+        // =====================================================
+
+        user.setEnabled(
+                user.isDeletionPreviousEnabled()
+        );
 
         return adminUserRepository.save(
                 user
@@ -1005,7 +992,7 @@ public class AccountManagementService {
     // RESTORE USER ACCOUNT
     // =========================================================
     //
-    // Restore does NOT automatically approve the account.
+    // Existing administrative restore functionality.
     //
     // deleted = false
     // enabled = false
@@ -1026,10 +1013,6 @@ public class AccountManagementService {
                                 )
                         );
 
-        // =====================================================
-        // SUPER ADMIN PROTECTION
-        // =====================================================
-
         if (AdminRoles.SUPER_ADMIN.equalsIgnoreCase(
                 user.getRole()
         )) {
@@ -1039,10 +1022,6 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // ALREADY ACTIVE
-        // =====================================================
-
         if (!user.isDeleted()) {
 
             throw new IllegalStateException(
@@ -1050,16 +1029,17 @@ public class AccountManagementService {
             );
         }
 
-        // =====================================================
-        // RESTORE
-        // =====================================================
+        user.setDeleted(
+                false
+        );
 
-        user.setDeleted(false);
+        user.setDeletionPending(
+                false
+        );
 
-        // Important:
-        // restored accounts remain disabled until
-        // explicitly enabled after approval.
-        user.setEnabled(false);
+        user.setEnabled(
+                false
+        );
 
         return adminUserRepository.save(
                 user

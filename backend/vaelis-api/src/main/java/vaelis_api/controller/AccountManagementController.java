@@ -1,6 +1,6 @@
 package vaelis_api.controller;
 import vaelis_api.service.AdminPermissionService;
-import vaelis_api.entity.AdminPermission;
+
 import vaelis_api.dto.AdminRegistrationRequest;
 import vaelis_api.dto.AdminUserResponse;
 import vaelis_api.dto.PasswordChangeRequest;

@@ -3,10 +3,10 @@ package vaelis_api.controller;
 import vaelis_api.dto.AdminUserResponse;
 import vaelis_api.entity.AdminUser;
 import vaelis_api.service.AdminApprovalService;
-
+import vaelis_api.service.AccountManagementService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 
@@ -21,13 +21,22 @@ public class SuperAdminController {
 
     private final AdminApprovalService
             adminApprovalService;
+   
+    private final AccountManagementService
+        accountManagementService;
+    
+    
 
-    public SuperAdminController(
-            AdminApprovalService adminApprovalService) {
+   public SuperAdminController(
+        AdminApprovalService adminApprovalService,
+        AccountManagementService accountManagementService) {
 
-        this.adminApprovalService =
-                adminApprovalService;
-    }
+    this.adminApprovalService =
+            adminApprovalService;
+
+    this.accountManagementService =
+            accountManagementService;
+}
 
     // =========================================================
     // PENDING ADMIN ACCOUNTS
@@ -796,6 +805,115 @@ public class SuperAdminController {
         }
     }
     // =========================================================
+// PENDING DELETION REQUESTS
+// =========================================================
+
+@GetMapping("/deletion-requests")
+public ResponseEntity<?> getDeletionRequests(
+        Authentication authentication) {
+
+    if (!isSuperAdmin(authentication)) {
+
+        return forbidden(
+                "Only SUPER_ADMIN can view deletion requests."
+        );
+    }
+
+    return ResponseEntity.ok(
+            accountManagementService
+                    .getPendingDeletionRequests()
+                    .stream()
+                    .map(AdminUserResponse::new)
+                    .toList()
+    );
+}
+
+// =========================================================
+// APPROVE DELETION REQUEST
+// =========================================================
+
+@PostMapping(
+        "/deletion-requests/{userId}/approve"
+)
+public ResponseEntity<?> approveDeletionRequest(
+        @PathVariable Long userId,
+        Authentication authentication) {
+
+    if (!isSuperAdmin(authentication)) {
+
+        return forbidden(
+                "Only SUPER_ADMIN can approve deletion requests."
+        );
+    }
+
+    try {
+
+        AdminUser deletedUser =
+                accountManagementService
+                        .approveDeletionRequest(
+                                userId,
+                                authentication.getName()
+                        );
+
+        return ResponseEntity.ok(
+                new AdminUserResponse(
+                        deletedUser
+                )
+        );
+
+    } catch (IllegalArgumentException |
+             IllegalStateException e) {
+
+        return ResponseEntity
+                .badRequest()
+                .body(e.getMessage());
+    }
+}
+
+// =========================================================
+// REJECT DELETION REQUEST
+// =========================================================
+
+@PostMapping(
+        "/deletion-requests/{userId}/reject"
+)
+public ResponseEntity<?> rejectDeletionRequest(
+        @PathVariable Long userId,
+        @RequestParam String reason,
+        Authentication authentication) {
+
+    if (!isSuperAdmin(authentication)) {
+
+        return forbidden(
+                "Only SUPER_ADMIN can reject deletion requests."
+        );
+    }
+
+    try {
+
+        AdminUser restoredUser =
+                accountManagementService
+                        .rejectDeletionRequest(
+                                userId,
+                                authentication.getName(),
+                                reason
+                        );
+
+        return ResponseEntity.ok(
+                new AdminUserResponse(
+                        restoredUser
+                )
+        );
+
+    } catch (IllegalArgumentException |
+             IllegalStateException e) {
+
+        return ResponseEntity
+                .badRequest()
+                .body(e.getMessage());
+    }
+}
+    // =========================================================
     // SUPER ADMIN CHECK
     // =========================================================
 
@@ -819,7 +937,7 @@ public class SuperAdminController {
                         )
                 );
     }
-
+    
     // =========================================================
     // FORBIDDEN RESPONSE
     // =========================================================
@@ -831,4 +949,5 @@ public class SuperAdminController {
                 .status(HttpStatus.FORBIDDEN)
                 .body(message);
     }
+    
 }

@@ -139,6 +139,82 @@ public class AdminUser {
     private LocalDateTime approvedAt;
 
     // =========================================================
+    // DELETION WORKFLOW
+    // =========================================================
+
+    /**
+     * True when an Account Manager has requested deletion
+     * and the request is waiting for Super Admin decision.
+     */
+    @Column(
+            nullable = false
+    )
+    private boolean deletionPending = false;
+
+    /**
+     * Whether the account was enabled immediately before
+     * the deletion request was created.
+     *
+     * Used to restore the correct state if Super Admin
+     * rejects the deletion request.
+     */
+    @Column(
+            nullable = false
+    )
+    private boolean deletionPreviousEnabled = false;
+
+    /**
+     * Account Manager who requested deletion.
+     */
+    @Column(
+            length = 100
+    )
+    private String deletionRequestedBy;
+
+    /**
+     * Time when deletion was requested.
+     */
+    @Column
+    private LocalDateTime deletionRequestedAt;
+
+    /**
+     * Super Admin who approved the deletion.
+     */
+    @Column(
+            length = 100
+    )
+    private String deletionApprovedBy;
+
+    /**
+     * Time when deletion was approved.
+     */
+    @Column
+    private LocalDateTime deletionApprovedAt;
+
+    /**
+     * Super Admin who rejected the deletion.
+     */
+    @Column(
+            length = 100
+    )
+    private String deletionRejectedBy;
+
+    /**
+     * Time when deletion was rejected.
+     */
+    @Column
+    private LocalDateTime deletionRejectedAt;
+
+    /**
+     * Mandatory reason provided by Super Admin
+     * when rejecting a deletion request.
+     */
+    @Column(
+            length = 1000
+    )
+    private String deletionRejectionReason;
+
+    // =========================================================
     // ADMIN PERMISSIONS
     // =========================================================
 
@@ -260,6 +336,10 @@ public class AdminUser {
         this.deleted = deleted;
     }
 
+    // =========================================================
+    // CREATED / UPDATED
+    // =========================================================
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
@@ -267,6 +347,10 @@ public class AdminUser {
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
     }
+
+    // =========================================================
+    // APPROVAL
+    // =========================================================
 
     public boolean isApproved() {
         return approved;
@@ -297,6 +381,112 @@ public class AdminUser {
 
         this.approvedAt = approvedAt;
     }
+
+    // =========================================================
+    // DELETION WORKFLOW GETTERS / SETTERS
+    // =========================================================
+
+    public boolean isDeletionPending() {
+        return deletionPending;
+    }
+
+    public void setDeletionPending(
+            boolean deletionPending) {
+
+        this.deletionPending = deletionPending;
+    }
+
+    public boolean isDeletionPreviousEnabled() {
+        return deletionPreviousEnabled;
+    }
+
+    public void setDeletionPreviousEnabled(
+            boolean deletionPreviousEnabled) {
+
+        this.deletionPreviousEnabled =
+                deletionPreviousEnabled;
+    }
+
+    public String getDeletionRequestedBy() {
+        return deletionRequestedBy;
+    }
+
+    public void setDeletionRequestedBy(
+            String deletionRequestedBy) {
+
+        this.deletionRequestedBy =
+                deletionRequestedBy;
+    }
+
+    public LocalDateTime getDeletionRequestedAt() {
+        return deletionRequestedAt;
+    }
+
+    public void setDeletionRequestedAt(
+            LocalDateTime deletionRequestedAt) {
+
+        this.deletionRequestedAt =
+                deletionRequestedAt;
+    }
+
+    public String getDeletionApprovedBy() {
+        return deletionApprovedBy;
+    }
+
+    public void setDeletionApprovedBy(
+            String deletionApprovedBy) {
+
+        this.deletionApprovedBy =
+                deletionApprovedBy;
+    }
+
+    public LocalDateTime getDeletionApprovedAt() {
+        return deletionApprovedAt;
+    }
+
+    public void setDeletionApprovedAt(
+            LocalDateTime deletionApprovedAt) {
+
+        this.deletionApprovedAt =
+                deletionApprovedAt;
+    }
+
+    public String getDeletionRejectedBy() {
+        return deletionRejectedBy;
+    }
+
+    public void setDeletionRejectedBy(
+            String deletionRejectedBy) {
+
+        this.deletionRejectedBy =
+                deletionRejectedBy;
+    }
+
+    public LocalDateTime getDeletionRejectedAt() {
+        return deletionRejectedAt;
+    }
+
+    public void setDeletionRejectedAt(
+            LocalDateTime deletionRejectedAt) {
+
+        this.deletionRejectedAt =
+                deletionRejectedAt;
+    }
+
+    public String getDeletionRejectionReason() {
+        return deletionRejectionReason;
+    }
+
+    public void setDeletionRejectionReason(
+            String deletionRejectionReason) {
+
+        this.deletionRejectionReason =
+                deletionRejectionReason;
+    }
+
+    // =========================================================
+    // PERMISSIONS
+    // =========================================================
 
     public Set<AdminPermission> getPermissions() {
         return permissions;
