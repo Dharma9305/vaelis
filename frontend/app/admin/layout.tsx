@@ -180,7 +180,8 @@ export default function AdminLayout({
   hasAdminPermission(
     profile,
     "DASHBOARD_VIEW"
-  );
+  ) ||
+  profile?.role === "ACCOUNT_MANAGER";
   const canViewProducts =
     hasAdminPermission(
       profile,
@@ -292,7 +293,30 @@ export default function AdminLayout({
                 Orders
               </Link>
             )}
+            {/* ===============================================
+    ACCOUNT MANAGEMENT
+    ACCOUNT_USERS_VIEW
+    =============================================== */}
 
+{hasAdminPermission(
+  profile,
+  "ACCOUNT_USERS_VIEW"
+) && (
+  <Link
+    href="/admin/account-management"
+    className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm transition ${
+      pathname.startsWith(
+        "/admin/account-management"
+      )
+        ? "bg-white text-black"
+        : "text-white/60 hover:bg-white/5 hover:text-white"
+    }`}
+  >
+    <Users size={16} />
+
+    Account Management
+  </Link>
+)}
             {/* ===============================================
                 SUPER ADMIN — ADMIN APPROVALS
                 =============================================== */}

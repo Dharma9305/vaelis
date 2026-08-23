@@ -5,7 +5,7 @@ const API_BASE_URL =
   "http://localhost:8080";
 
 // =========================================================
-// ADMIN PERMISSIONS
+// ADMIN PERMISSION
 // =========================================================
 
 export type AdminPermission = {
@@ -22,8 +22,28 @@ export type AdminPermission = {
 
 export type AdminProfile = {
   username: string;
-  role: "ADMIN" | "SUPER_ADMIN";
+
+  role:
+    | "ADMIN"
+    | "SUPER_ADMIN"
+    | "ACCOUNT_MANAGER";
+
   permissions: string[];
+};
+
+// =========================================================
+// API PROFILE RESPONSE
+// =========================================================
+
+type AdminProfileResponse = {
+  username: string;
+
+  role:
+    | "ADMIN"
+    | "SUPER_ADMIN"
+    | "ACCOUNT_MANAGER";
+
+  permissions?: string[];
 };
 
 // =========================================================
@@ -31,17 +51,31 @@ export type AdminProfile = {
 // =========================================================
 
 export function getAdminCredentials(): string | null {
-  if (typeof window === "undefined") {
+
+  if (
+    typeof window ===
+    "undefined"
+  ) {
     return null;
   }
 
-  return localStorage.getItem(ADMIN_AUTH_KEY);
+  return localStorage.getItem(
+    ADMIN_AUTH_KEY
+  );
 }
+
+// =========================================================
+// SET CREDENTIALS
+// =========================================================
 
 export function setAdminCredentials(
   credentials: string
 ): void {
-  if (typeof window === "undefined") {
+
+  if (
+    typeof window ===
+    "undefined"
+  ) {
     return;
   }
 
@@ -51,8 +85,16 @@ export function setAdminCredentials(
   );
 }
 
+// =========================================================
+// CLEAR CREDENTIALS
+// =========================================================
+
 export function clearAdminCredentials(): void {
-  if (typeof window === "undefined") {
+
+  if (
+    typeof window ===
+    "undefined"
+  ) {
     return;
   }
 
@@ -96,7 +138,7 @@ export async function getAdminProfile():
   try {
 
     // =====================================================
-    // LOAD BASIC ADMIN PROFILE
+    // LOAD PROFILE
     // =====================================================
 
     const profileResponse =
@@ -106,11 +148,15 @@ export async function getAdminProfile():
           method: "GET",
 
           headers: {
-            Authorization: authHeader,
-            Accept: "application/json",
+            Authorization:
+              authHeader,
+
+            Accept:
+              "application/json",
           },
 
-          cache: "no-store",
+          cache:
+            "no-store",
         }
       );
 
@@ -118,33 +164,58 @@ export async function getAdminProfile():
     // AUTHENTICATION FAILED
     // =====================================================
 
-    if (!profileResponse.ok) {
+    if (
+      !profileResponse.ok
+    ) {
       return null;
     }
 
+    // =====================================================
+    // PARSE PROFILE
+    // =====================================================
+
     const profile =
-      await profileResponse.json();
+      (await profileResponse.json()) as
+        AdminProfileResponse;
 
     // =====================================================
     // VALIDATE ROLE
     // =====================================================
 
     if (
-      profile?.role !== "ADMIN" &&
-      profile?.role !== "SUPER_ADMIN"
+      profile.role !== "ADMIN" &&
+      profile.role !== "SUPER_ADMIN" &&
+      profile.role !== "ACCOUNT_MANAGER"
     ) {
+
       return null;
     }
+
+    // =====================================================
+    // PERMISSIONS
+    //
+    // /api/admin/me already returns the permissions
+    // for the authenticated user.
+    //
+    // Do NOT make another /api/admin/permissions request.
+    // =====================================================
+
+    const permissions: string[] =
+      Array.isArray(
+        profile.permissions
+      )
+        ? profile.permissions
+        : [];
 
     // =====================================================
     // SUPER ADMIN
     //
     // SUPER_ADMIN automatically has full access.
-    // We don't need to request individual permissions.
     // =====================================================
 
     if (
-      profile.role === "SUPER_ADMIN"
+      profile.role ===
+      "SUPER_ADMIN"
     ) {
 
       return {
@@ -159,87 +230,7 @@ export async function getAdminProfile():
     }
 
     // =====================================================
-    // ADMIN PERMISSIONS
-    //
-    // IMPORTANT:
-    // The endpoint is protected by SUPER_ADMIN on backend.
-    // Therefore a normal ADMIN will receive 403 here.
-    //
-    // We will NOT treat that as authentication failure.
-    // Instead, permissions will be loaded through the
-    // admin-specific permission endpoint when available.
-    // =====================================================
-
-   let permissions:
-  string[] = [];
-
-    try {
-
-      const permissionsResponse =
-        await fetch(
-          `${API_BASE_URL}/api/admin/permissions`,
-          {
-            method: "GET",
-
-            headers: {
-              Authorization:
-                authHeader,
-
-              Accept:
-                "application/json",
-            },
-
-            cache:
-              "no-store",
-          }
-        );
-
-      if (
-  permissionsResponse.ok
-) {
-
-  const data =
-    await permissionsResponse.json();
-
-  if (
-    Array.isArray(data)
-  ) {
-
-    permissions =
-      data
-        .filter(
-          (
-            permission
-          ) =>
-            permission &&
-            permission.enabled !== false
-        )
-        .map(
-          (
-            permission
-          ) =>
-            permission.code
-        )
-        .filter(
-          (
-            code
-          ): code is string =>
-            typeof code ===
-            "string"
-        );
-  }
-}
-
-    } catch (permissionError) {
-
-      console.error(
-        "Unable to load admin permissions:",
-        permissionError
-      );
-    }
-
-    // =====================================================
-    // RETURN ADMIN PROFILE
+    // NORMAL ADMIN / ACCOUNT MANAGER
     // =====================================================
 
     return {
@@ -268,9 +259,14 @@ export async function getAdminProfile():
 // =========================================================
 
 export function hasAdminPermission(
-  profile: AdminProfile | null,
-  permission: string
+  profile:
+    | AdminProfile
+    | null,
+
+  permission:
+    string
 ): boolean {
+
   if (!profile) {
     return false;
   }
@@ -279,25 +275,33 @@ export function hasAdminPermission(
   // SUPER ADMIN HAS FULL ACCESS
   // =======================================================
 
-  if (profile.role === "SUPER_ADMIN") {
+  if (
+    profile.role ===
+    "SUPER_ADMIN"
+  ) {
     return true;
   }
 
   // =======================================================
-  // NORMAL ADMIN
+  // NORMAL ADMIN / ACCOUNT MANAGER
   // =======================================================
 
   return profile.permissions.includes(
     permission
   );
 }
+
 // =========================================================
 // MULTIPLE PERMISSION CHECK
 // =========================================================
 
 export function hasAnyAdminPermission(
-  profile: AdminProfile | null,
-  permissionCodes: string[]
+  profile:
+    | AdminProfile
+    | null,
+
+  permissionCodes:
+    string[]
 ): boolean {
 
   if (!profile) {
@@ -305,7 +309,8 @@ export function hasAnyAdminPermission(
   }
 
   if (
-    profile.role === "SUPER_ADMIN"
+    profile.role ===
+    "SUPER_ADMIN"
   ) {
     return true;
   }
@@ -318,13 +323,18 @@ export function hasAnyAdminPermission(
       )
   );
 }
+
 // =========================================================
 // REQUIRED PERMISSION CHECK
 // =========================================================
 
 export function requireAdminPermission(
-  profile: AdminProfile | null,
-  permissionCode: string
+  profile:
+    | AdminProfile
+    | null,
+
+  permissionCode:
+    string
 ): void {
 
   if (
@@ -333,11 +343,13 @@ export function requireAdminPermission(
       permissionCode
     )
   ) {
+
     throw new Error(
       `Missing admin permission: ${permissionCode}`
     );
   }
 }
+
 // =========================================================
 // SUPER ADMIN CHECK
 // =========================================================

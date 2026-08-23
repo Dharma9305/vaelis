@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import API_BASE_URL from "@/lib/api";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -62,13 +62,14 @@ export default function AdminLoginPage() {
       await response.json();
 
     if (
-      profile?.role !== "ADMIN" &&
-      profile?.role !== "SUPER_ADMIN"
-    ) {
-      throw new Error(
-        "This account is not authorized for the Admin Panel."
-      );
-    }
+        profile?.role !== "ADMIN" &&
+        profile?.role !== "SUPER_ADMIN" &&
+        profile?.role !== "ACCOUNT_MANAGER"
+      ) {
+        throw new Error(
+          "This account is not authorized for the Admin Panel."
+        );
+      }
 
     // Save authentication for admin pages
     setAdminCredentials(
@@ -208,3 +209,6 @@ export default function AdminLoginPage() {
     </main>
   );
 }
+
+
+

@@ -187,6 +187,15 @@ if (
       setProfile(adminProfile);
 
 if (
+  adminProfile.role === "ACCOUNT_MANAGER"
+) {
+  window.location.href =
+    "/admin/account-management";
+
+  return;
+}
+
+if (
   !hasAdminPermission(
     adminProfile,
     "DASHBOARD_VIEW"
