@@ -14,11 +14,17 @@ public class AdminApprovalService {
 
     private final AdminUserRepository adminUserRepository;
 
+    private final AdminActivityLogService adminActivityLogService;
+
     public AdminApprovalService(
-            AdminUserRepository adminUserRepository) {
+            AdminUserRepository adminUserRepository,
+            AdminActivityLogService adminActivityLogService) {
 
         this.adminUserRepository =
                 adminUserRepository;
+
+        this.adminActivityLogService =
+                adminActivityLogService;
     }
 
     // =========================================================
@@ -77,9 +83,19 @@ public class AdminApprovalService {
                 approvedBy
         );
 
-        return adminUserRepository.save(
-                adminUser
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        adminUser
+                );
+
+        adminActivityLogService.log(
+                "APPROVE_ADMIN",
+                savedUser,
+                "ADMIN account approved and enabled by Super Admin.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -106,9 +122,19 @@ public class AdminApprovalService {
 
         reject(adminUser);
 
-        return adminUserRepository.save(
-                adminUser
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        adminUser
+                );
+
+        adminActivityLogService.log(
+                "REJECT_ADMIN",
+                savedUser,
+                "ADMIN account approval rejected.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -135,9 +161,19 @@ public class AdminApprovalService {
 
         adminUser.setEnabled(false);
 
-        return adminUserRepository.save(
-                adminUser
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        adminUser
+                );
+
+        adminActivityLogService.log(
+                "DISABLE_ADMIN",
+                savedUser,
+                "ADMIN account disabled by Super Admin.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -166,9 +202,19 @@ public class AdminApprovalService {
 
         adminUser.setEnabled(true);
 
-        return adminUserRepository.save(
-                adminUser
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        adminUser
+                );
+
+        adminActivityLogService.log(
+                "ENABLE_ADMIN",
+                savedUser,
+                "ADMIN account enabled by Super Admin.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -227,9 +273,19 @@ public class AdminApprovalService {
                 approvedBy
         );
 
-        return adminUserRepository.save(
-                accountManager
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        accountManager
+                );
+
+        adminActivityLogService.log(
+                "APPROVE_ACCOUNT_MANAGER",
+                savedUser,
+                "ACCOUNT_MANAGER account approved and enabled by Super Admin.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -256,9 +312,19 @@ public class AdminApprovalService {
 
         reject(accountManager);
 
-        return adminUserRepository.save(
-                accountManager
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        accountManager
+                );
+
+        adminActivityLogService.log(
+                "REJECT_ACCOUNT_MANAGER",
+                savedUser,
+                "ACCOUNT_MANAGER approval rejected.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -285,9 +351,19 @@ public class AdminApprovalService {
 
         accountManager.setEnabled(false);
 
-        return adminUserRepository.save(
-                accountManager
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        accountManager
+                );
+
+        adminActivityLogService.log(
+                "DISABLE_ACCOUNT_MANAGER",
+                savedUser,
+                "ACCOUNT_MANAGER account disabled by Super Admin.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -316,9 +392,19 @@ public class AdminApprovalService {
 
         accountManager.setEnabled(true);
 
-        return adminUserRepository.save(
-                accountManager
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        accountManager
+                );
+
+        adminActivityLogService.log(
+                "ENABLE_ACCOUNT_MANAGER",
+                savedUser,
+                "ACCOUNT_MANAGER account enabled by Super Admin.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -377,9 +463,19 @@ public class AdminApprovalService {
                 approvedBy
         );
 
-        return adminUserRepository.save(
-                employee
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        employee
+                );
+
+        adminActivityLogService.log(
+                "APPROVE_EMPLOYEE",
+                savedUser,
+                "EMPLOYEE account approved and enabled by Super Admin.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -406,9 +502,19 @@ public class AdminApprovalService {
 
         reject(employee);
 
-        return adminUserRepository.save(
-                employee
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        employee
+                );
+
+        adminActivityLogService.log(
+                "REJECT_EMPLOYEE",
+                savedUser,
+                "EMPLOYEE approval rejected.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -435,9 +541,19 @@ public class AdminApprovalService {
 
         employee.setEnabled(false);
 
-        return adminUserRepository.save(
-                employee
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        employee
+                );
+
+        adminActivityLogService.log(
+                "DISABLE_EMPLOYEE",
+                savedUser,
+                "EMPLOYEE account disabled by Super Admin.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -466,11 +582,22 @@ public class AdminApprovalService {
 
         employee.setEnabled(true);
 
-        return adminUserRepository.save(
-                employee
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        employee
+                );
+
+        adminActivityLogService.log(
+                "ENABLE_EMPLOYEE",
+                savedUser,
+                "EMPLOYEE account enabled by Super Admin.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
-        // =========================================================
+
+    // =========================================================
     // DELETED USERS
     // =========================================================
 
@@ -523,15 +650,6 @@ public class AdminApprovalService {
     // =========================================================
     // RESTORE DELETED USER
     // =========================================================
-    //
-    // IMPORTANT:
-    // Restoring does NOT automatically enable the account.
-    //
-    // deleted  -> false
-    // enabled  -> false
-    //
-    // SUPER_ADMIN must explicitly enable the account afterward.
-    // =========================================================
 
     @Transactional
     public AdminUser restoreDeletedUser(
@@ -564,10 +682,21 @@ public class AdminApprovalService {
         // Restored accounts remain disabled.
         user.setEnabled(false);
 
-        return adminUserRepository.save(
-                user
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        user
+                );
+
+        adminActivityLogService.log(
+                "RESTORE_USER",
+                savedUser,
+                "Deleted user account restored. Account remains disabled pending explicit enablement.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
+
     // =========================================================
     // COMMON: FIND ACCOUNT
     // =========================================================

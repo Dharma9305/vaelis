@@ -10,6 +10,7 @@ import {
   UserX,
   Save,
   Lock,
+  Clock,
 } from "lucide-react";
 
 import API_BASE_URL from "@/lib/api";
@@ -35,7 +36,18 @@ type Permission = {
   description: string;
   enabled: boolean;
 };
-
+type AdminActivityLog = {
+  id: number;
+  actorUsername: string;
+  actorRole: string;
+  action: string;
+  targetUserId: number | null;
+  targetUsername: string | null;
+  targetRole: string | null;
+  details: string | null;
+  result: string;
+  createdAt: string;
+};
 export default function AdminManagementPage() {
   // =========================================================
   // ADMIN STATE
@@ -71,7 +83,15 @@ export default function AdminManagementPage() {
 
   const [permissionsLoaded, setPermissionsLoaded] =
     useState(false);
+    // =========================================================
+  // ACTIVITY LOG STATE
+  // =========================================================
 
+  const [activityLogs, setActivityLogs] =
+    useState<AdminActivityLog[]>([]);
+
+  const [activityLogsLoading, setActivityLogsLoading] =
+    useState(false);
   // =========================================================
   // MESSAGES
   // =========================================================
@@ -324,17 +344,97 @@ export default function AdminManagementPage() {
       },
       []
     );
+        // =========================================================
+  // LOAD ADMIN ACTIVITY LOGS
+  // =========================================================
 
+  const loadActivityLogs =
+    useCallback(
+      async () => {
+        try {
+          setActivityLogsLoading(true);
+          setError("");
+
+          const authHeader =
+            getAdminAuthHeader();
+
+          if (!authHeader) {
+            throw new Error(
+              "Admin authentication is required."
+            );
+          }
+
+          const response =
+            await fetch(
+              `${API_BASE_URL}/api/super-admin/activity-logs`,
+              {
+                method: "GET",
+                headers: {
+                  Authorization: authHeader,
+                  Accept: "application/json",
+                },
+                cache: "no-store",
+              }
+            );
+
+          if (!response.ok) {
+
+            if (response.status === 403) {
+              throw new Error(
+                "Only SUPER_ADMIN can view Admin activity logs."
+              );
+            }
+
+            const message =
+              await response.text();
+
+            throw new Error(
+              message ||
+                "Unable to load Admin activity logs."
+            );
+          }
+
+          const data =
+            await response.json();
+
+          setActivityLogs(
+            Array.isArray(data)
+              ? data
+              : []
+          );
+
+        } catch (err) {
+
+          console.error(
+            "Load Admin activity logs error:",
+            err
+          );
+
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Unable to load Admin activity logs."
+          );
+
+        } finally {
+
+          setActivityLogsLoading(false);
+        }
+      },
+      []
+    );
   // =========================================================
   // INITIAL LOAD
   // =========================================================
 
-  useEffect(() => {
+   useEffect(() => {
     loadAdmins();
     loadPermissions();
+    loadActivityLogs();
   }, [
     loadAdmins,
     loadPermissions,
+    loadActivityLogs,
   ]);
 
   // =========================================================
@@ -595,6 +695,7 @@ export default function AdminManagementPage() {
       );
 
       await loadAdmins();
+await loadActivityLogs();
     } catch (err) {
       console.error(
         "Disable Admin error:",
@@ -668,7 +769,8 @@ export default function AdminManagementPage() {
         "Admin account enabled successfully."
       );
 
-      await loadAdmins();
+     await loadAdmins();
+await loadActivityLogs();
     } catch (err) {
       console.error(
         "Enable Admin error:",
@@ -762,23 +864,26 @@ export default function AdminManagementPage() {
         <button
           type="button"
           onClick={() => {
-            loadAdmins();
-            loadPermissions();
-          }}
-          disabled={
-            loading ||
-            permissionsLoading
-          }
+  loadAdmins();
+  loadPermissions();
+  loadActivityLogs();
+}}
+         disabled={
+  loading ||
+  permissionsLoading ||
+  activityLogsLoading
+}
           className="flex items-center justify-center gap-2 rounded-full border border-white/10 px-5 py-3 text-sm text-white/70 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw
             size={16}
-            className={
-              loading ||
-              permissionsLoading
-                ? "animate-spin"
-                : ""
-            }
+          className={
+  loading ||
+  permissionsLoading ||
+  activityLogsLoading
+    ? "animate-spin"
+    : ""
+}
           />
 
           Refresh
@@ -1310,7 +1415,239 @@ export default function AdminManagementPage() {
 
           </div>
         )}
+  {/* =====================================================
+          ACTION LOG
+          ===================================================== */}
 
+      <section className="mt-10">
+
+        <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+          <div>
+
+            <div className="flex items-center gap-2">
+
+              <Clock
+                size={20}
+                className="text-[#c9a227]"
+              />
+
+              <h2 className="text-xl font-semibold">
+                Action Log
+              </h2>
+
+            </div>
+
+            <p className="mt-1 text-sm text-white/40">
+              Complete audit history of Super Admin
+              and Admin account activity.
+            </p>
+
+          </div>
+
+          <button
+            type="button"
+            onClick={loadActivityLogs}
+            disabled={activityLogsLoading}
+            className="flex items-center justify-center gap-2 rounded-full border border-white/10 px-5 py-3 text-sm text-white/70 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+
+            <RefreshCw
+              size={16}
+              className={
+                activityLogsLoading
+                  ? "animate-spin"
+                  : ""
+              }
+            />
+
+            Refresh Log
+
+          </button>
+
+        </div>
+
+        {activityLogsLoading && (
+          <div className="rounded-3xl border border-white/10 bg-white/[0.02] px-6 py-12 text-center">
+
+            <RefreshCw
+              size={24}
+              className="mx-auto mb-4 animate-spin text-white/40"
+            />
+
+            <p className="text-sm text-white/40">
+              Loading activity log...
+            </p>
+
+          </div>
+        )}
+
+        {!activityLogsLoading &&
+          activityLogs.length === 0 && (
+            <div className="rounded-3xl border border-white/10 bg-white/[0.02] px-6 py-12 text-center">
+
+              <Clock
+                size={30}
+                className="mx-auto mb-4 text-white/25"
+              />
+
+              <p className="text-sm text-white/40">
+                No admin activity has been recorded yet.
+              </p>
+
+            </div>
+          )}
+
+        {!activityLogsLoading &&
+          activityLogs.length > 0 && (
+            <div className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.02]">
+
+              <div className="overflow-x-auto">
+
+                <table className="w-full min-w-[1000px] text-left">
+
+                  <thead className="border-b border-white/10 bg-white/[0.03]">
+
+                    <tr>
+
+                      <th className="px-5 py-4 text-xs font-medium uppercase tracking-wider text-white/30">
+                        Time
+                      </th>
+
+                      <th className="px-5 py-4 text-xs font-medium uppercase tracking-wider text-white/30">
+                        Actor
+                      </th>
+
+                      <th className="px-5 py-4 text-xs font-medium uppercase tracking-wider text-white/30">
+                        Action
+                      </th>
+
+                      <th className="px-5 py-4 text-xs font-medium uppercase tracking-wider text-white/30">
+                        Target
+                      </th>
+
+                      <th className="px-5 py-4 text-xs font-medium uppercase tracking-wider text-white/30">
+                        Details
+                      </th>
+
+                      <th className="px-5 py-4 text-xs font-medium uppercase tracking-wider text-white/30">
+                        Result
+                      </th>
+
+                    </tr>
+
+                  </thead>
+
+                  <tbody className="divide-y divide-white/5">
+
+                    {activityLogs.map(
+                      (log) => (
+                        <tr
+                          key={log.id}
+                          className="transition hover:bg-white/[0.025]"
+                        >
+
+                          {/* TIME */}
+
+                          <td className="whitespace-nowrap px-5 py-4">
+
+                            <p className="text-sm text-white/70">
+                              {formatDate(
+                                log.createdAt
+                              )}
+                            </p>
+
+                          </td>
+
+                          {/* ACTOR */}
+
+                          <td className="px-5 py-4">
+
+                            <p className="font-medium text-white/80">
+                              {log.actorUsername}
+                            </p>
+
+                            <p className="mt-1 text-xs text-[#c9a227]">
+                              {log.actorRole}
+                            </p>
+
+                          </td>
+
+                          {/* ACTION */}
+
+                          <td className="px-5 py-4">
+
+                            <span className="inline-flex rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs font-medium text-white/70">
+                              {log.action}
+                            </span>
+
+                          </td>
+
+                          {/* TARGET */}
+
+                          <td className="px-5 py-4">
+
+                            {log.targetUsername ? (
+                              <>
+                                <p className="font-medium text-white/80">
+                                  {log.targetUsername}
+                                </p>
+
+                                <p className="mt-1 text-xs text-white/35">
+                                  {log.targetRole || "-"}
+                                  {log.targetUserId !== null &&
+                                    ` · ID ${log.targetUserId}`}
+                                </p>
+                              </>
+                            ) : (
+                              <span className="text-white/30">
+                                -
+                              </span>
+                            )}
+
+                          </td>
+
+                          {/* DETAILS */}
+
+                          <td className="max-w-md px-5 py-4">
+
+                            <p className="text-sm leading-5 text-white/45">
+                              {log.details || "-"}
+                            </p>
+
+                          </td>
+
+                          {/* RESULT */}
+
+                          <td className="px-5 py-4">
+
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${
+                                log.result ===
+                                "SUCCESS"
+                                  ? "border border-green-500/20 bg-green-500/5 text-green-300"
+                                  : "border border-red-500/20 bg-red-500/5 text-red-300"
+                              }`}
+                            >
+                              {log.result}
+                            </span>
+
+                          </td>
+
+                        </tr>
+                      )
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            </div>
+          )}
+
+      </section>
     </main>
   );
 }

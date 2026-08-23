@@ -19,15 +19,21 @@ public class AccountManagementService {
 
     private final PasswordEncoder passwordEncoder;
 
+    private final AdminActivityLogService adminActivityLogService;
+
     public AccountManagementService(
             AdminUserRepository adminUserRepository,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            AdminActivityLogService adminActivityLogService) {
 
         this.adminUserRepository =
                 adminUserRepository;
 
         this.passwordEncoder =
                 passwordEncoder;
+
+        this.adminActivityLogService =
+                adminActivityLogService;
     }
 
     // =========================================================
@@ -143,9 +149,19 @@ public class AccountManagementService {
                 false
         );
 
-        return adminUserRepository.save(
-                accountManager
+        AdminUser savedAccountManager =
+                adminUserRepository.save(
+                        accountManager
+                );
+
+        adminActivityLogService.log(
+                "CREATE_ACCOUNT_MANAGER",
+                savedAccountManager,
+                "Account Manager registration created and is pending Super Admin approval.",
+                "SUCCESS"
         );
+
+        return savedAccountManager;
     }
 
     // =========================================================
@@ -324,9 +340,20 @@ public class AccountManagementService {
                 false
         );
 
-        return adminUserRepository.save(
-                user
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        user
+                );
+
+        adminActivityLogService.log(
+                "CREATE_USER",
+                savedUser,
+                "Created " + savedUser.getRole()
+                        + " account. Account is pending approval.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -366,7 +393,7 @@ public class AccountManagementService {
                     "Deleted user accounts cannot be modified."
             );
         }
-        
+
         // =====================================================
         // DELETION REQUEST FREEZE
         // =====================================================
@@ -454,9 +481,19 @@ public class AccountManagementService {
                 email
         );
 
-        return adminUserRepository.save(
-                user
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        user
+                );
+
+        adminActivityLogService.log(
+                "UPDATE_USER",
+                savedUser,
+                "Updated username/email for user account.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -520,9 +557,19 @@ public class AccountManagementService {
 
         user.setEnabled(false);
 
-        return adminUserRepository.save(
-                user
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        user
+                );
+
+        adminActivityLogService.log(
+                "DISABLE_USER",
+                savedUser,
+                "User account disabled.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -578,9 +625,19 @@ public class AccountManagementService {
 
         user.setEnabled(true);
 
-        return adminUserRepository.save(
-                user
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        user
+                );
+
+        adminActivityLogService.log(
+                "ENABLE_USER",
+                savedUser,
+                "User account enabled.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
@@ -668,38 +725,35 @@ public class AccountManagementService {
                 )
         );
 
-        return adminUserRepository.save(
-                user
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        user
+                );
+
+        adminActivityLogService.log(
+                "CHANGE_PASSWORD",
+                savedUser,
+                "User password changed by authorized account management personnel.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
+
     // =========================================================
-// GET PENDING DELETION REQUESTS
-// =========================================================
+    // GET PENDING DELETION REQUESTS
+    // =========================================================
 
-@Transactional(readOnly = true)
-public List<AdminUser>
-getPendingDeletionRequests() {
+    @Transactional(readOnly = true)
+    public List<AdminUser>
+    getPendingDeletionRequests() {
 
-    return adminUserRepository
-            .findByDeletionPendingTrueAndDeletedFalseOrderByDeletionRequestedAtDesc();
-}
+        return adminUserRepository
+                .findByDeletionPendingTrueAndDeletedFalseOrderByDeletionRequestedAtDesc();
+    }
 
     // =========================================================
     // REQUEST USER ACCOUNT DELETION
-    // =========================================================
-    //
-    // IMPORTANT:
-    //
-    // Account Manager does NOT immediately delete the account.
-    //
-    // Instead:
-    //
-    // deletionPending = true
-    // deleted         = false
-    // enabled         = false
-    //
-    // The account is therefore frozen until Super Admin
-    // approves or rejects the deletion request.
     // =========================================================
 
     @Transactional
@@ -720,7 +774,7 @@ getPendingDeletionRequests() {
                                         "User account not found."
                                 )
                         );
-                        
+
         // =====================================================
         // ALREADY DELETED
         // =====================================================
@@ -802,7 +856,6 @@ getPendingDeletionRequests() {
         );
 
         // =====================================================
-        // IMPORTANT:
         // DO NOT SOFT DELETE YET
         // =====================================================
 
@@ -810,18 +863,23 @@ getPendingDeletionRequests() {
                 false
         );
 
-        return adminUserRepository.save(
-                user
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        user
+                );
+
+        adminActivityLogService.log(
+                "REQUEST_DELETE_USER",
+                savedUser,
+                "Account deletion requested by Account Manager. Account frozen pending Super Admin approval.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
     // APPROVE DELETION REQUEST
-    // =========================================================
-    //
-    // SUPER ADMIN only.
-    //
-    // This is the point where the actual soft delete occurs.
     // =========================================================
 
     @Transactional
@@ -885,21 +943,23 @@ getPendingDeletionRequests() {
                 false
         );
 
-        return adminUserRepository.save(
-                user
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        user
+                );
+
+        adminActivityLogService.log(
+                "APPROVE_DELETE_USER",
+                savedUser,
+                "Super Admin approved the deletion request. Account soft-deleted.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
     // REJECT DELETION REQUEST
-    // =========================================================
-    //
-    // SUPER ADMIN only.
-    //
-    // A rejection reason is mandatory.
-    //
-    // The account returns to the enabled/disabled state that
-    // existed before the deletion request.
     // =========================================================
 
     @Transactional
@@ -983,21 +1043,24 @@ getPendingDeletionRequests() {
                 user.isDeletionPreviousEnabled()
         );
 
-        return adminUserRepository.save(
-                user
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        user
+                );
+
+        adminActivityLogService.log(
+                "REJECT_DELETE_USER",
+                savedUser,
+                "Super Admin rejected the deletion request. Reason: "
+                        + rejectionReason,
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 
     // =========================================================
     // RESTORE USER ACCOUNT
-    // =========================================================
-    //
-    // Existing administrative restore functionality.
-    //
-    // deleted = false
-    // enabled = false
-    //
-    // Super Admin approval is required before enabling.
     // =========================================================
 
     @Transactional
@@ -1041,8 +1104,18 @@ getPendingDeletionRequests() {
                 false
         );
 
-        return adminUserRepository.save(
-                user
+        AdminUser savedUser =
+                adminUserRepository.save(
+                        user
+                );
+
+        adminActivityLogService.log(
+                "RESTORE_USER",
+                savedUser,
+                "Deleted user account restored. Account remains disabled pending explicit enablement.",
+                "SUCCESS"
         );
+
+        return savedUser;
     }
 }
