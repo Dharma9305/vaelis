@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   LayoutDashboard,
@@ -14,6 +14,8 @@ import {
   Trash2,
 } from "lucide-react";
 
+import API_BASE_URL from "@/lib/api";
+
 import {
   getAdminCredentials,
   clearAdminCredentials,
@@ -21,6 +23,9 @@ import {
   hasAdminPermission,
   type AdminProfile,
 } from "@/lib/adminAuth";
+
+const IDLE_TIMEOUT_MS =
+  7 * 60 * 1000;
 
 export default function AdminLayout({
   children,
@@ -32,15 +37,146 @@ export default function AdminLayout({
 
   const [checkingAuth, setCheckingAuth] =
     useState(true);
-    
-  const [checkingRoutePermission, setCheckingRoutePermission] =
-  useState(true);
+
+  const [
+    checkingRoutePermission,
+    setCheckingRoutePermission,
+  ] = useState(true);
 
   const [profile, setProfile] =
     useState<AdminProfile | null>(null);
 
   const isLoginPage =
     pathname === "/admin/login";
+
+  const idleTimerRef =
+    useRef<ReturnType<typeof setTimeout> | null>(
+      null
+    );
+
+  const logoutInProgressRef =
+    useRef(false);
+
+  // =========================================================
+  // CLEAR IDLE TIMER
+  // =========================================================
+
+  function clearIdleTimer() {
+    if (
+      idleTimerRef.current !== null
+    ) {
+      clearTimeout(
+        idleTimerRef.current
+      );
+
+      idleTimerRef.current = null;
+    }
+  }
+
+  // =========================================================
+  // SERVER LOGOUT
+  // =========================================================
+
+  async function performLogout(
+    reason:
+      | "USER_LOGOUT"
+      | "IDLE_TIMEOUT"
+  ) {
+    if (
+      logoutInProgressRef.current
+    ) {
+      return;
+    }
+
+    logoutInProgressRef.current =
+      true;
+
+    clearIdleTimer();
+
+    const credentials =
+      getAdminCredentials();
+
+    try {
+      if (credentials) {
+        await fetch(
+  `${API_BASE_URL}/api/admin/auth/logout?reason=${encodeURIComponent(reason)}`,
+          {
+            method: "POST",
+
+            headers: {
+              Authorization:
+                `Basic ${credentials}`,
+
+              Accept:
+                "application/json",
+            },
+
+            cache:
+              "no-store",
+
+            keepalive:
+              true,
+          }
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Admin logout request failed:",
+        error
+      );
+    } finally {
+      clearAdminCredentials();
+
+      setProfile(null);
+
+      logoutInProgressRef.current =
+        false;
+
+      if (
+        reason ===
+        "IDLE_TIMEOUT"
+      ) {
+        router.replace(
+          "/admin/login?reason=idle-timeout"
+        );
+      } else {
+        router.replace(
+          "/admin/login"
+        );
+      }
+    }
+  }
+
+  // =========================================================
+  // START / RESET IDLE TIMER
+  // =========================================================
+
+  function resetIdleTimer() {
+    if (isLoginPage) {
+      return;
+    }
+
+    if (!profile) {
+      return;
+    }
+
+    if (
+      logoutInProgressRef.current
+    ) {
+      return;
+    }
+
+    clearIdleTimer();
+
+    idleTimerRef.current =
+      setTimeout(() => {
+
+        performLogout(
+          "IDLE_TIMEOUT"
+        );
+
+      }, IDLE_TIMEOUT_MS);
+  }
 
   // =========================================================
   // AUTHENTICATION + PERMISSION LOAD
@@ -59,7 +195,10 @@ export default function AdminLayout({
         getAdminCredentials();
 
       if (!credentials) {
-        router.replace("/admin/login");
+        router.replace(
+          "/admin/login"
+        );
+
         return;
       }
 
@@ -68,12 +207,19 @@ export default function AdminLayout({
 
       if (!adminProfile) {
         clearAdminCredentials();
-        router.replace("/admin/login");
+
+        router.replace(
+          "/admin/login"
+        );
+
         return;
       }
 
       if (mounted) {
-        setProfile(adminProfile);
+        setProfile(
+          adminProfile
+        );
+
         setCheckingAuth(false);
       }
     }
@@ -83,15 +229,22 @@ export default function AdminLayout({
     return () => {
       mounted = false;
     };
-  }, [isLoginPage, router]);
-    // =========================================================
+  }, [
+    isLoginPage,
+    router,
+  ]);
+
+  // =========================================================
   // SUPER ADMIN ROUTE PROTECTION
   // =========================================================
 
   useEffect(() => {
 
     if (isLoginPage) {
-      setCheckingRoutePermission(false);
+      setCheckingRoutePermission(
+        false
+      );
+
       return;
     }
 
@@ -104,29 +257,35 @@ export default function AdminLayout({
     }
 
     const superAdminOnlyRoute =
-  pathname.startsWith(
-    "/admin/admin-management"
-  ) ||
-  pathname.startsWith(
-    "/admin/admin-approvals"
-  ) ||
-  pathname.startsWith(
-    "/admin/deletion-requests"
-  );
+      pathname.startsWith(
+        "/admin/admin-management"
+      ) ||
+      pathname.startsWith(
+        "/admin/admin-approvals"
+      ) ||
+      pathname.startsWith(
+        "/admin/deletion-requests"
+      );
 
     if (
       superAdminOnlyRoute &&
-      profile.role !== "SUPER_ADMIN"
+      profile.role !==
+        "SUPER_ADMIN"
     ) {
+      setCheckingRoutePermission(
+        false
+      );
 
-      setCheckingRoutePermission(false);
-
-      router.replace("/admin");
+      router.replace(
+        "/admin"
+      );
 
       return;
     }
 
-    setCheckingRoutePermission(false);
+    setCheckingRoutePermission(
+      false
+    );
 
   }, [
     pathname,
@@ -135,16 +294,77 @@ export default function AdminLayout({
     isLoginPage,
     router,
   ]);
+
+  // =========================================================
+  // START IDLE MONITOR
+  // =========================================================
+
+  useEffect(() => {
+
+    if (
+      isLoginPage ||
+      checkingAuth ||
+      !profile
+    ) {
+      clearIdleTimer();
+      return;
+    }
+
+    const activityEvents = [
+      "mousemove",
+      "mousedown",
+      "keydown",
+      "scroll",
+      "touchstart",
+      "click",
+    ];
+
+    const handleActivity = () => {
+      resetIdleTimer();
+    };
+
+    activityEvents.forEach(
+      (eventName) => {
+        window.addEventListener(
+          eventName,
+          handleActivity,
+          {
+            passive: true,
+          }
+        );
+      }
+    );
+
+    resetIdleTimer();
+
+    return () => {
+
+      activityEvents.forEach(
+        (eventName) => {
+          window.removeEventListener(
+            eventName,
+            handleActivity
+          );
+        }
+      );
+
+      clearIdleTimer();
+    };
+
+  }, [
+    isLoginPage,
+    checkingAuth,
+    profile,
+  ]);
+
   // =========================================================
   // LOGOUT
   // =========================================================
 
-  function handleLogout() {
-    clearAdminCredentials();
-    setProfile(null);
+  async function handleLogout() {
 
-    router.push(
-      "/admin/login"
+    await performLogout(
+      "USER_LOGOUT"
     );
   }
 
@@ -161,9 +381,9 @@ export default function AdminLayout({
   // =========================================================
 
   if (
-  checkingAuth ||
-  checkingRoutePermission
-) {
+    checkingAuth ||
+    checkingRoutePermission
+  ) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#050505] text-white">
         <p className="text-sm text-white/40">
@@ -180,12 +400,15 @@ export default function AdminLayout({
   const isSuperAdmin =
     profile?.role ===
     "SUPER_ADMIN";
+
   const canViewDashboard =
-  hasAdminPermission(
-    profile,
-    "DASHBOARD_VIEW"
-  ) ||
-  profile?.role === "ACCOUNT_MANAGER";
+    hasAdminPermission(
+      profile,
+      "DASHBOARD_VIEW"
+    ) ||
+    profile?.role ===
+      "ACCOUNT_MANAGER";
+
   const canViewProducts =
     hasAdminPermission(
       profile,
@@ -218,22 +441,21 @@ export default function AdminLayout({
               ================================================= */}
 
           {canViewDashboard && (
-          <Link
-            href="/admin"
-            className="text-lg font-semibold tracking-[0.25em]"
-          >
-            VAELIS
-          </Link>
+            <Link
+              href="/admin"
+              className="text-lg font-semibold tracking-[0.25em]"
+            >
+              VAELIS
+            </Link>
           )}
+
           {/* =================================================
               NAVIGATION
               ================================================= */}
 
           <nav className="flex items-center gap-2">
 
-            {/* ===============================================
-                DASHBOARD
-                =============================================== */}
+            {/* DASHBOARD */}
 
             <Link
               href="/admin"
@@ -250,10 +472,7 @@ export default function AdminLayout({
               Dashboard
             </Link>
 
-            {/* ===============================================
-                PRODUCTS
-                PRODUCTS_VIEW
-                =============================================== */}
+            {/* PRODUCTS */}
 
             {canViewProducts && (
               <Link
@@ -274,10 +493,7 @@ export default function AdminLayout({
               </Link>
             )}
 
-            {/* ===============================================
-                ORDERS
-                ORDERS_VIEW
-                =============================================== */}
+            {/* ORDERS */}
 
             {canViewOrders && (
               <Link
@@ -297,33 +513,32 @@ export default function AdminLayout({
                 Orders
               </Link>
             )}
-            {/* ===============================================
-    ACCOUNT MANAGEMENT
-    ACCOUNT_USERS_VIEW
-    =============================================== */}
 
-{hasAdminPermission(
-  profile,
-  "ACCOUNT_USERS_VIEW"
-) && (
-  <Link
-    href="/admin/account-management"
-    className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm transition ${
-      pathname.startsWith(
-        "/admin/account-management"
-      )
-        ? "bg-white text-black"
-        : "text-white/60 hover:bg-white/5 hover:text-white"
-    }`}
-  >
-    <Users size={16} />
+            {/* ACCOUNT MANAGEMENT */}
 
-    Account Management
-  </Link>
-)}
-            {/* ===============================================
-                SUPER ADMIN — ADMIN APPROVALS
-                =============================================== */}
+            {hasAdminPermission(
+              profile,
+              "ACCOUNT_USERS_VIEW"
+            ) && (
+              <Link
+                href="/admin/account-management"
+                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm transition ${
+                  pathname.startsWith(
+                    "/admin/account-management"
+                  )
+                    ? "bg-white text-black"
+                    : "text-white/60 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <Users
+                  size={16}
+                />
+
+                Account Management
+              </Link>
+            )}
+
+            {/* ADMIN APPROVALS */}
 
             {isSuperAdmin && (
               <Link
@@ -344,9 +559,7 @@ export default function AdminLayout({
               </Link>
             )}
 
-            {/* ===============================================
-                SUPER ADMIN — ADMIN MANAGEMENT
-                =============================================== */}
+            {/* ADMIN MANAGEMENT */}
 
             {isSuperAdmin && (
               <Link
@@ -366,33 +579,29 @@ export default function AdminLayout({
                 Admin Management
               </Link>
             )}
-            
-            {/* ===============================================
-    SUPER ADMIN — DELETION REQUESTS
-    =============================================== */}
 
-{isSuperAdmin && (
-  <Link
-    href="/admin/deletion-requests"
-    className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm transition ${
-      pathname.startsWith(
-        "/admin/deletion-requests"
-      )
-        ? "bg-white text-black"
-        : "text-white/60 hover:bg-white/5 hover:text-white"
-    }`}
-  >
-    <Trash2
-      size={16}
-    />
+            {/* DELETION REQUESTS */}
 
-    Deletion Requests
-  </Link>
-)}
+            {isSuperAdmin && (
+              <Link
+                href="/admin/deletion-requests"
+                className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm transition ${
+                  pathname.startsWith(
+                    "/admin/deletion-requests"
+                  )
+                    ? "bg-white text-black"
+                    : "text-white/60 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <Trash2
+                  size={16}
+                />
 
-            {/* ===============================================
-                ROLE
-                =============================================== */}
+                Deletion Requests
+              </Link>
+            )}
+
+            {/* ROLE */}
 
             {profile && (
               <div className="ml-2 hidden items-center gap-2 rounded-full border border-white/10 px-4 py-2 text-xs sm:flex">
@@ -415,9 +624,7 @@ export default function AdminLayout({
               </div>
             )}
 
-            {/* ===============================================
-                LOGOUT
-                =============================================== */}
+            {/* LOGOUT */}
 
             <button
               type="button"

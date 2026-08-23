@@ -20,13 +20,19 @@ public class SecurityConfig {
 
     private final FirebaseAuthenticationFilter
             firebaseAuthenticationFilter;
+    private final AdminSessionActivityFilter
+        adminSessionActivityFilter;
 
-    public SecurityConfig(
-            FirebaseAuthenticationFilter firebaseAuthenticationFilter) {
+  public SecurityConfig(
+        FirebaseAuthenticationFilter firebaseAuthenticationFilter,
+        AdminSessionActivityFilter adminSessionActivityFilter) {
 
-        this.firebaseAuthenticationFilter =
-                firebaseAuthenticationFilter;
-    }
+    this.firebaseAuthenticationFilter =
+            firebaseAuthenticationFilter;
+
+    this.adminSessionActivityFilter =
+            adminSessionActivityFilter;
+}
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -52,10 +58,14 @@ public class SecurityConfig {
             // FIREBASE CUSTOMER AUTHENTICATION
             // =================================================
 
-            .addFilterBefore(
-                    firebaseAuthenticationFilter,
-                    UsernamePasswordAuthenticationFilter.class
-            )
+            // =================================================
+// VAELIS ADMIN SESSION ACTIVITY
+// =================================================
+
+.addFilterAfter(
+        adminSessionActivityFilter,
+        UsernamePasswordAuthenticationFilter.class
+)
 
             // =================================================
             // AUTHORIZATION

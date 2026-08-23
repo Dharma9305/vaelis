@@ -1,107 +1,227 @@
 ﻿"use client";
+
 import API_BASE_URL from "@/lib/api";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import {setAdminCredentials,} from "@/lib/adminAuth";
+
+import {
+  setAdminCredentials,
+} from "@/lib/adminAuth";
+
 export default function AdminLoginPage() {
-  const router = useRouter();
 
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const router =
+    useRouter();
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [username, setUsername] =
+    useState("");
+
+  const [password, setPassword] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
 
   async function handleLogin(
-  event: FormEvent<HTMLFormElement>
-) {
-  event.preventDefault();
+    event: FormEvent<HTMLFormElement>
+  ) {
 
-  setLoading(true);
-  setError("");
+    event.preventDefault();
 
-  try {
-    const credentials =
-      btoa(`${username}:${password}`);
+    setLoading(true);
+    setError("");
 
-    const response =
-      await fetch(
-        `${API_BASE_URL}/api/admin/me`,
-        {
-          method: "GET",
+    try {
 
-          headers: {
-            Authorization:
-              `Basic ${credentials}`,
+      // =====================================================
+      // BASIC AUTH CREDENTIALS
+      // =====================================================
 
-            Accept:
-              "application/json",
-          },
+      const credentials =
+        btoa(
+          `${username}:${password}`
+        );
 
-          cache: "no-store",
-        }
-      );
+      const authHeader =
+        `Basic ${credentials}`;
 
-    if (response.status === 401) {
-      throw new Error(
-        "Invalid username or password."
-      );
-    }
+      // =====================================================
+      // STEP 1
+      // VERIFY ADMIN CREDENTIALS
+      // =====================================================
 
-    if (!response.ok) {
-      const message =
-        await response.text();
+      const profileResponse =
+        await fetch(
+          `${API_BASE_URL}/api/admin/me`,
+          {
+            method: "GET",
 
-      throw new Error(
-        message ||
-          "Unable to login."
-      );
-    }
+            headers: {
+              Authorization:
+                authHeader,
 
-    const profile =
-      await response.json();
+              Accept:
+                "application/json",
+            },
 
-    if (
-        profile?.role !== "ADMIN" &&
-        profile?.role !== "SUPER_ADMIN" &&
-        profile?.role !== "ACCOUNT_MANAGER"
+            cache:
+              "no-store",
+          }
+        );
+
+      // =====================================================
+      // INVALID CREDENTIALS
+      // =====================================================
+
+      if (
+        profileResponse.status ===
+        401
       ) {
+
+        throw new Error(
+          "Invalid username or password."
+        );
+      }
+
+      // =====================================================
+      // OTHER PROFILE ERROR
+      // =====================================================
+
+      if (
+        !profileResponse.ok
+      ) {
+
+        const message =
+          await profileResponse.text();
+
+        throw new Error(
+          message ||
+          "Unable to login."
+        );
+      }
+
+      // =====================================================
+      // LOAD PROFILE
+      // =====================================================
+
+      const profile =
+        await profileResponse.json();
+
+      // =====================================================
+      // ROLE VALIDATION
+      // =====================================================
+
+      if (
+        profile?.role !==
+          "ADMIN" &&
+        profile?.role !==
+          "SUPER_ADMIN" &&
+        profile?.role !==
+          "ACCOUNT_MANAGER"
+      ) {
+
         throw new Error(
           "This account is not authorized for the Admin Panel."
         );
       }
 
-    // Save authentication for admin pages
-    setAdminCredentials(
-      credentials
-    );
+      // =====================================================
+      // STEP 2
+      // CREATE SERVER ADMIN SESSION
+      // =====================================================
 
-    router.push("/admin");
+      const sessionResponse =
+        await fetch(
+          `${API_BASE_URL}/api/admin/auth/login`,
+          {
+            method: "POST",
 
-  } catch (error) {
+            headers: {
+              Authorization:
+                authHeader,
 
-    console.error(
-      "Admin login error:",
-      error
-    );
+              Accept:
+                "application/json",
+            },
 
-    setError(
-      error instanceof Error
-        ? error.message
-        : "Unable to login."
-    );
+            cache:
+              "no-store",
+          }
+        );
 
-  } finally {
-    setLoading(false);
+      // =====================================================
+      // SESSION CREATION FAILED
+      // =====================================================
+
+      if (
+        sessionResponse.status ===
+        401
+      ) {
+
+        throw new Error(
+          "Unable to create admin session."
+        );
+      }
+
+      if (
+        !sessionResponse.ok
+      ) {
+
+        const message =
+          await sessionResponse.text();
+
+        throw new Error(
+          message ||
+          "Unable to create admin session."
+        );
+      }
+
+      // =====================================================
+      // SAVE AUTHENTICATION
+      // =====================================================
+
+      setAdminCredentials(
+        credentials
+      );
+
+      // =====================================================
+      // ADMIN PANEL
+      // =====================================================
+
+      router.replace(
+        "/admin"
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Admin login error:",
+        error
+      );
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Unable to login."
+      );
+
+    } finally {
+
+      setLoading(false);
+    }
   }
-}
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#050505] px-6 text-white">
 
       <div className="w-full max-w-md">
 
-        {/* LOGO */}
+        {/* ===================================================
+            LOGO
+            =================================================== */}
 
         <div className="mb-10 text-center">
 
@@ -115,7 +235,9 @@ export default function AdminLoginPage() {
 
         </div>
 
-        {/* LOGIN CARD */}
+        {/* ===================================================
+            LOGIN CARD
+            =================================================== */}
 
         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-8">
 
@@ -128,11 +250,15 @@ export default function AdminLoginPage() {
           </p>
 
           <form
-            onSubmit={handleLogin}
+            onSubmit={
+              handleLogin
+            }
             className="mt-8 space-y-5"
           >
 
-            {/* USERNAME */}
+            {/* =============================================
+                USERNAME
+                ============================================= */}
 
             <div>
 
@@ -142,9 +268,13 @@ export default function AdminLoginPage() {
 
               <input
                 type="text"
-                value={username}
+                value={
+                  username
+                }
                 onChange={(e) =>
-                  setUsername(e.target.value)
+                  setUsername(
+                    e.target.value
+                  )
                 }
                 placeholder="Enter username"
                 autoComplete="username"
@@ -154,7 +284,9 @@ export default function AdminLoginPage() {
 
             </div>
 
-            {/* PASSWORD */}
+            {/* =============================================
+                PASSWORD
+                ============================================= */}
 
             <div>
 
@@ -164,9 +296,13 @@ export default function AdminLoginPage() {
 
               <input
                 type="password"
-                value={password}
+                value={
+                  password
+                }
                 onChange={(e) =>
-                  setPassword(e.target.value)
+                  setPassword(
+                    e.target.value
+                  )
                 }
                 placeholder="Enter password"
                 autoComplete="current-password"
@@ -176,7 +312,24 @@ export default function AdminLoginPage() {
 
             </div>
 
-            {/* ERROR */}
+            {/* =============================================
+                IDLE TIMEOUT MESSAGE
+                ============================================= */}
+
+            {typeof window !==
+              "undefined" &&
+              new URLSearchParams(
+                window.location.search
+              ).get("reason") ===
+                "idle-timeout" && (
+                <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-300">
+                  Your session expired because there was no activity for 7 minutes.
+                </div>
+              )}
+
+            {/* =============================================
+                ERROR
+                ============================================= */}
 
             {error && (
               <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
@@ -184,11 +337,15 @@ export default function AdminLoginPage() {
               </div>
             )}
 
-            {/* LOGIN BUTTON */}
+            {/* =============================================
+                LOGIN BUTTON
+                ============================================= */}
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={
+                loading
+              }
               className="w-full rounded-xl bg-white px-5 py-3 font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading
@@ -209,6 +366,3 @@ export default function AdminLoginPage() {
     </main>
   );
 }
-
-
-
