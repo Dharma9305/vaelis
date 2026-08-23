@@ -11,6 +11,7 @@ import {
   Users,
   Package,
   LogOut,
+  Trash2,
 } from "lucide-react";
 
 import {
@@ -103,12 +104,15 @@ export default function AdminLayout({
     }
 
     const superAdminOnlyRoute =
-      pathname.startsWith(
-        "/admin/admin-management"
-      ) ||
-      pathname.startsWith(
-        "/admin/admin-approvals"
-      );
+  pathname.startsWith(
+    "/admin/admin-management"
+  ) ||
+  pathname.startsWith(
+    "/admin/admin-approvals"
+  ) ||
+  pathname.startsWith(
+    "/admin/deletion-requests"
+  );
 
     if (
       superAdminOnlyRoute &&
@@ -362,6 +366,29 @@ export default function AdminLayout({
                 Admin Management
               </Link>
             )}
+            
+            {/* ===============================================
+    SUPER ADMIN — DELETION REQUESTS
+    =============================================== */}
+
+{isSuperAdmin && (
+  <Link
+    href="/admin/deletion-requests"
+    className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm transition ${
+      pathname.startsWith(
+        "/admin/deletion-requests"
+      )
+        ? "bg-white text-black"
+        : "text-white/60 hover:bg-white/5 hover:text-white"
+    }`}
+  >
+    <Trash2
+      size={16}
+    />
+
+    Deletion Requests
+  </Link>
+)}
 
             {/* ===============================================
                 ROLE
