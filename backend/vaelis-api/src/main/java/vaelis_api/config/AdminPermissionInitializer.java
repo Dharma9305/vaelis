@@ -37,6 +37,12 @@ public class AdminPermissionInitializer {
                     "View User Accounts",
                     "Allows the authorized account manager to view employee and admin accounts."
             );
+            createIfMissing(
+        repository,
+        "EMPLOYEE_RECORDS_VIEW",
+        "View Employee Records",
+        "Allows authorized personnel to view corporate employee records and employee profile information."
+           );
 
             createIfMissing(
                     repository,
@@ -58,7 +64,182 @@ public class AdminPermissionInitializer {
                     "Disable User Accounts",
                     "Allows the authorized account manager to disable employee and admin accounts."
             );
+            // =====================================================
+// EMPLOYEE RECORDS
+// =====================================================
+createIfMissing(
+        repository,
+        "EMPLOYEE_RECORDS_UPDATE",
+        "Update Employee Records",
+        "Allows authorized personnel to update corporate employee records."
+);
+createIfMissing(
+        repository,
+        "EMPLOYEE_RECORDS_CREATE",
+        "Create Employee Records",
+        "Allows authorized personnel to create corporate employee records."
+);
+createIfMissing(
+        repository,
+        "EMPLOYEE_RECORDS_VIEW",
+        "View Employee Records",
+        "Allows authorized personnel to view employee corporate records."
+);
+// =====================================================
+// EMPLOYEE ADDRESSES
+// =====================================================
 
+createIfMissing(
+        repository,
+        "EMPLOYEE_ADDRESS_VIEW",
+        "View Employee Addresses",
+        "Allows authorized personnel to view employee addresses."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_ADDRESS_CREATE",
+        "Create Employee Addresses",
+        "Allows authorized personnel to create employee addresses."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_ADDRESS_UPDATE",
+        "Update Employee Addresses",
+        "Allows authorized personnel to update employee addresses."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_ADDRESS_DELETE",
+        "Delete Employee Addresses",
+        "Allows authorized personnel to delete employee addresses."
+);
+// =====================================================
+// EMPLOYEE DOCUMENTS
+// =====================================================
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_DOCUMENT_VIEW",
+        "View Employee Documents",
+        "Allows authorized personnel to view employee documents."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_DOCUMENT_CREATE",
+        "Create Employee Documents",
+        "Allows authorized personnel to create employee documents."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_DOCUMENT_UPDATE",
+        "Update Employee Documents",
+        "Allows authorized personnel to update employee documents."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_DOCUMENT_DELETE",
+        "Delete Employee Documents",
+        "Allows authorized personnel to delete employee documents."
+);
+// =====================================================
+// EMPLOYEE EMPLOYMENT HISTORY
+// =====================================================
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_EMPLOYMENT_HISTORY_VIEW",
+        "View Employee Employment History",
+        "Allows authorized personnel to view an employee's previous employment history."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_EMPLOYMENT_HISTORY_CREATE",
+        "Create Employee Employment History",
+        "Allows authorized personnel to add previous employment history for an employee."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_EMPLOYMENT_HISTORY_UPDATE",
+        "Update Employee Employment History",
+        "Allows authorized personnel to update an employee's previous employment history."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_EMPLOYMENT_HISTORY_DELETE",
+        "Delete Employee Employment History",
+        "Allows authorized personnel to delete an employee's previous employment history."
+);
+// =====================================================
+// EMPLOYEE EDUCATION
+// =====================================================
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_EDUCATION_VIEW",
+        "View Employee Education",
+        "Allows authorized personnel to view employee education and qualification records."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_EDUCATION_CREATE",
+        "Create Employee Education",
+        "Allows authorized personnel to create employee education and qualification records."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_EDUCATION_UPDATE",
+        "Update Employee Education",
+        "Allows authorized personnel to update employee education and qualification records."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_EDUCATION_DELETE",
+        "Delete Employee Education",
+        "Allows authorized personnel to delete employee education and qualification records."
+);
+// =====================================================
+// EMPLOYEE SKILLS
+// =====================================================
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_SKILL_VIEW",
+        "View Employee Skills",
+        "Allows authorized personnel to view employee skills and competencies."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_SKILL_CREATE",
+        "Create Employee Skills",
+        "Allows authorized personnel to create employee skills and competencies."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_SKILL_UPDATE",
+        "Update Employee Skills",
+        "Allows authorized personnel to update employee skills and competencies."
+);
+
+createIfMissing(
+        repository,
+        "EMPLOYEE_SKILL_DELETE",
+        "Delete Employee Skills",
+        "Allows authorized personnel to delete employee skills and competencies."
+);
             // =====================================================
             // ENABLE USER ACCOUNTS
             // =====================================================

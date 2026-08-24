@@ -36,11 +36,9 @@ public class AdminPermissionService {
     // =========================================================
 
     @Transactional(readOnly = true)
-    public List<AdminPermission>
-    getAllPermissions() {
+    public List<AdminPermission> getAllPermissions() {
 
-        return adminPermissionRepository
-                .findAll();
+        return adminPermissionRepository.findAll();
     }
 
     // =========================================================
@@ -48,8 +46,7 @@ public class AdminPermissionService {
     // =========================================================
 
     @Transactional(readOnly = true)
-    public Set<AdminPermission>
-    getAdminPermissions(
+    public Set<AdminPermission> getAdminPermissions(
             Long adminUserId) {
 
         AdminUser adminUser =
@@ -65,8 +62,7 @@ public class AdminPermissionService {
     // =========================================================
 
     @Transactional
-    public AdminUser
-    assignPermissions(
+    public AdminUser assignPermissions(
             Long adminUserId,
             Set<Long> permissionIds) {
 
@@ -77,21 +73,17 @@ public class AdminPermissionService {
                 adminUser
         );
 
-        Set<AdminPermission>
-                permissions =
+        Set<AdminPermission> permissions =
                 new HashSet<>();
 
         if (permissionIds != null &&
                 !permissionIds.isEmpty()) {
 
-            for (Long permissionId :
-                    permissionIds) {
+            for (Long permissionId : permissionIds) {
 
                 AdminPermission permission =
                         adminPermissionRepository
-                                .findById(
-                                        permissionId
-                                )
+                                .findById(permissionId)
                                 .orElseThrow(() ->
                                         new IllegalArgumentException(
                                                 "Permission not found: "
@@ -112,7 +104,7 @@ public class AdminPermissionService {
                 }
 
                 // =================================================
-                // ACCOUNT MANAGER SECURITY BOUNDARY
+                // ROLE SECURITY BOUNDARY
                 // =================================================
 
                 validatePermissionForRole(
@@ -140,8 +132,7 @@ public class AdminPermissionService {
     // =========================================================
 
     @Transactional
-    public AdminUser
-    addPermission(
+    public AdminUser addPermission(
             Long adminUserId,
             Long permissionId) {
 
@@ -154,9 +145,7 @@ public class AdminPermissionService {
 
         AdminPermission permission =
                 adminPermissionRepository
-                        .findById(
-                                permissionId
-                        )
+                        .findById(permissionId)
                         .orElseThrow(() ->
                                 new IllegalArgumentException(
                                         "Permission not found."
@@ -175,7 +164,7 @@ public class AdminPermissionService {
         }
 
         // =====================================================
-        // ACCOUNT MANAGER SECURITY BOUNDARY
+        // ROLE SECURITY BOUNDARY
         // =====================================================
 
         validatePermissionForRole(
@@ -197,8 +186,7 @@ public class AdminPermissionService {
     // =========================================================
 
     @Transactional
-    public AdminUser
-    removePermission(
+    public AdminUser removePermission(
             Long adminUserId,
             Long permissionId) {
 
@@ -215,9 +203,7 @@ public class AdminPermissionService {
                         permission ->
                                 permission
                                         .getId()
-                                        .equals(
-                                                permissionId
-                                        )
+                                        .equals(permissionId)
                 );
 
         return adminUserRepository.save(
@@ -229,8 +215,8 @@ public class AdminPermissionService {
     // FIND USER
     // =========================================================
 
-    private AdminUser
-    findAdmin(Long adminUserId) {
+    private AdminUser findAdmin(
+            Long adminUserId) {
 
         return adminUserRepository
                 .findById(adminUserId)
@@ -281,12 +267,31 @@ public class AdminPermissionService {
         // =====================================================
 
         throw new IllegalStateException(
-                "Permissions can only be assigned to ADMIN or ACCOUNT_MANAGER accounts."
+                "Permissions can only be assigned to "
+                        + "ADMIN or ACCOUNT_MANAGER accounts."
         );
     }
 
     // =========================================================
     // VALIDATE PERMISSION FOR ROLE
+    // =========================================================
+    //
+    // ACCOUNT_MANAGER can receive only explicitly approved
+    // permission families.
+    //
+    // ALLOWED:
+    //
+    // ACCOUNT_USERS_*
+    // EMPLOYEE_RECORDS_*
+    // EMPLOYEE_ADDRESS_*
+    // EMPLOYEE_EMERGENCY_CONTACT_*
+    // EMPLOYEE_DOCUMENT_*
+    // EMPLOYEE_EMPLOYMENT_HISTORY_*
+    // EMPLOYEE_EDUCATION_*
+    // EMPLOYEE_SKILL_*
+    //
+    // EVERYTHING ELSE IS DENIED.
+    //
     // =========================================================
 
     private void validatePermissionForRole(
@@ -294,27 +299,142 @@ public class AdminPermissionService {
             AdminPermission permission) {
 
         // =====================================================
-        // ACCOUNT MANAGER CAN ONLY RECEIVE ACCOUNT PERMISSIONS
+        // ONLY APPLY THIS RESTRICTION TO ACCOUNT_MANAGER
         // =====================================================
 
-        if ("ACCOUNT_MANAGER".equalsIgnoreCase(
+        if (!"ACCOUNT_MANAGER".equalsIgnoreCase(
                 adminUser.getRole()
         )) {
 
-            String permissionCode =
-                    permission.getCode();
-
-            if (permissionCode == null ||
-                    !permissionCode
-                            .toUpperCase()
-                            .startsWith(
-                                    "ACCOUNT_USERS_"
-                            )) {
-
-                throw new IllegalStateException(
-                        "ACCOUNT_MANAGER can only receive ACCOUNT_USERS permissions."
-                );
-            }
+            return;
         }
+
+        // =====================================================
+        // VALIDATE PERMISSION OBJECT
+        // =====================================================
+
+        if (permission == null) {
+
+            throw new IllegalStateException(
+                    "Permission is required."
+            );
+        }
+
+        String permissionCode =
+                permission.getCode();
+
+        if (permissionCode == null ||
+                permissionCode.isBlank()) {
+
+            throw new IllegalStateException(
+                    "Permission code is required."
+            );
+        }
+
+        // =====================================================
+        // NORMALIZE
+        // =====================================================
+
+        String normalizedCode =
+                permissionCode
+                        .trim()
+                        .toUpperCase();
+
+        // =====================================================
+        // ACCOUNT USER PERMISSIONS
+        // =====================================================
+
+        if (normalizedCode.startsWith(
+                "ACCOUNT_USERS_"
+        )) {
+
+            return;
+        }
+
+        // =====================================================
+        // EMPLOYEE RECORD PERMISSIONS
+        // =====================================================
+
+        if (normalizedCode.startsWith(
+                "EMPLOYEE_RECORDS_"
+        )) {
+
+            return;
+        }
+
+        // =====================================================
+        // EMPLOYEE ADDRESS PERMISSIONS
+        // =====================================================
+
+        if (normalizedCode.startsWith(
+                "EMPLOYEE_ADDRESS_"
+        )) {
+
+            return;
+        }
+
+        // =====================================================
+        // EMPLOYEE EMERGENCY CONTACT PERMISSIONS
+        // =====================================================
+
+        if (normalizedCode.startsWith(
+                "EMPLOYEE_EMERGENCY_CONTACT_"
+        )) {
+
+            return;
+        }
+
+        // =====================================================
+        // EMPLOYEE DOCUMENT PERMISSIONS
+        // =====================================================
+
+        if (normalizedCode.startsWith(
+                "EMPLOYEE_DOCUMENT_"
+        )) {
+
+            return;
+        }
+
+        // =====================================================
+        // EMPLOYEE EMPLOYMENT HISTORY PERMISSIONS
+        // =====================================================
+
+        if (normalizedCode.startsWith(
+                "EMPLOYEE_EMPLOYMENT_HISTORY_"
+        )) {
+
+            return;
+        }
+
+        // =====================================================
+        // EMPLOYEE EDUCATION PERMISSIONS
+        // =====================================================
+
+        if (normalizedCode.startsWith(
+                "EMPLOYEE_EDUCATION_"
+        )) {
+
+            return;
+        }
+
+        // =====================================================
+        // EMPLOYEE SKILL PERMISSIONS
+        // =====================================================
+
+        if (normalizedCode.startsWith(
+                "EMPLOYEE_SKILL_"
+        )) {
+
+            return;
+        }
+
+        // =====================================================
+        // DENY EVERYTHING ELSE
+        // =====================================================
+
+        throw new IllegalStateException(
+                "ACCOUNT_MANAGER cannot receive permission: "
+                        + permissionCode
+        );
     }
 }

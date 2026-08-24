@@ -1,5 +1,7 @@
 package vaelis_api.config;
 
+import vaelis_api.security.AdminAccessDeniedHandler;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -20,19 +22,31 @@ public class SecurityConfig {
 
     private final FirebaseAuthenticationFilter
             firebaseAuthenticationFilter;
+
     private final AdminSessionActivityFilter
-        adminSessionActivityFilter;
-
-  public SecurityConfig(
-        FirebaseAuthenticationFilter firebaseAuthenticationFilter,
-        AdminSessionActivityFilter adminSessionActivityFilter) {
-
-    this.firebaseAuthenticationFilter =
-            firebaseAuthenticationFilter;
-
-    this.adminSessionActivityFilter =
             adminSessionActivityFilter;
-}
+
+    private final AdminAccessDeniedHandler
+            adminAccessDeniedHandler;
+
+    public SecurityConfig(
+            FirebaseAuthenticationFilter firebaseAuthenticationFilter,
+            AdminSessionActivityFilter adminSessionActivityFilter,
+            AdminAccessDeniedHandler adminAccessDeniedHandler) {
+
+        this.firebaseAuthenticationFilter =
+                firebaseAuthenticationFilter;
+
+        this.adminSessionActivityFilter =
+                adminSessionActivityFilter;
+
+        this.adminAccessDeniedHandler =
+                adminAccessDeniedHandler;
+    }
+
+    // =========================================================
+    // SECURITY FILTER CHAIN
+    // =========================================================
 
     @Bean
     public SecurityFilterChain securityFilterChain(
@@ -58,14 +72,19 @@ public class SecurityConfig {
             // FIREBASE CUSTOMER AUTHENTICATION
             // =================================================
 
-            // =================================================
-// VAELIS ADMIN SESSION ACTIVITY
-// =================================================
+            .addFilterBefore(
+                    firebaseAuthenticationFilter,
+                    UsernamePasswordAuthenticationFilter.class
+            )
 
-.addFilterAfter(
-        adminSessionActivityFilter,
-        UsernamePasswordAuthenticationFilter.class
-)
+            // =================================================
+            // VAELIS ADMIN SESSION ACTIVITY
+            // =================================================
+
+            .addFilterAfter(
+                    adminSessionActivityFilter,
+                    UsernamePasswordAuthenticationFilter.class
+            )
 
             // =================================================
             // AUTHORIZATION
@@ -131,12 +150,6 @@ public class SecurityConfig {
                 // ADMIN ORDER VIEW
                 // =================================================
                 //
-                // GET /api/admin/orders
-                //
-                // GET /api/admin/orders/{id}/shipment-history
-                //
-                // GET /api/admin/orders/{id}/status-history
-                //
                 // ADMIN requires:
                 // ORDERS_VIEW
                 //
@@ -158,19 +171,6 @@ public class SecurityConfig {
                 // =================================================
                 // ADMIN ORDER MANAGEMENT
                 // =================================================
-                //
-                // PUT status
-                // PUT payment
-                // PUT shipment
-                // POST refund
-                //
-                // ADMIN requires:
-                // ORDERS_MANAGE
-                //
-                // SUPER_ADMIN:
-                // Full access
-                //
-                // =================================================
 
                 .requestMatchers(
                         HttpMethod.PUT,
@@ -187,6 +187,33 @@ public class SecurityConfig {
                         "/api/admin/orders/*/refund"
                 ).hasAnyAuthority(
                         "ORDERS_MANAGE",
+                        "ROLE_SUPER_ADMIN"
+                )
+
+                // =================================================
+                // EMPLOYEE RECORD ACCESS
+                // =================================================
+                //
+                // SUPER_ADMIN:
+                // Full access because SUPER_ADMIN represents
+                // VAELIS INDIA.
+                //
+                // ADMIN / ACCOUNT_MANAGER:
+                // Explicit EMPLOYEE_RECORDS_VIEW required.
+                //
+                // EMPLOYEE:
+                // No access.
+                //
+                // IMPORTANT:
+                // This MUST appear before /api/admin/**.
+                //
+                // =================================================
+
+                .requestMatchers(
+                        "/api/admin/employees",
+                        "/api/admin/employees/**"
+                ).hasAnyAuthority(
+                        "EMPLOYEE_RECORDS_VIEW",
                         "ROLE_SUPER_ADMIN"
                 )
 
@@ -238,23 +265,18 @@ public class SecurityConfig {
                 // ADMIN APIs
                 // =================================================
                 //
-                // Includes:
-                //
-                // /api/admin/me
-                // /api/admin/admin-...
-                //
-                // Product/order endpoints with specific
-                // permissions are already handled ABOVE.
+                // Specific permission-protected endpoints are
+                // already handled above.
                 //
                 // =================================================
 
                 .requestMatchers(
-                 "/api/admin/**"
-                         ).hasAnyRole(
-                                "ADMIN",
-                                "ACCOUNT_MANAGER",
-                                "SUPER_ADMIN"
-                        )
+                        "/api/admin/**"
+                ).hasAnyRole(
+                        "ADMIN",
+                        "ACCOUNT_MANAGER",
+                        "SUPER_ADMIN"
+                )
 
                 // =================================================
                 // ADMIN REGISTRATION
@@ -270,6 +292,25 @@ public class SecurityConfig {
                 // =================================================
 
                 .anyRequest().authenticated()
+            )
+
+            // =================================================
+            // EXCEPTION HANDLING
+            // =================================================
+            //
+            // Authentication failures remain handled by Spring.
+            //
+            // Authorization failures are sent through our
+            // audit-aware handler.
+            //
+            // =================================================
+
+            .exceptionHandling(
+                    exceptionHandling ->
+                            exceptionHandling
+                                    .accessDeniedHandler(
+                                            adminAccessDeniedHandler
+                                    )
             )
 
             // =================================================

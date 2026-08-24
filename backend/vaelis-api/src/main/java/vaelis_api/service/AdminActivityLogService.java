@@ -4,7 +4,7 @@ import vaelis_api.entity.AdminActivityLog;
 import vaelis_api.entity.AdminUser;
 import vaelis_api.repository.AdminActivityLogRepository;
 import vaelis_api.repository.AdminUserRepository;
-
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
+@Transactional
 public class AdminActivityLogService {
 
     private final AdminActivityLogRepository repository;
@@ -31,8 +32,11 @@ public class AdminActivityLogService {
     // LOG ADMIN ACTIVITY
     // =========================================================
 
-    @Transactional
-    public AdminActivityLog log(
+@Transactional(
+        propagation = Propagation.REQUIRES_NEW,
+        readOnly = false
+)
+public AdminActivityLog log(
             String action,
             Long targetUserId,
             String targetUsername,
