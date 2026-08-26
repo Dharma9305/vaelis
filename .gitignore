@@ -1,3 +1,10 @@
 
 # VAELIS local recovery backups
 VAELIS_PHASE_*_STABLE_BACKUP.zip
+
+# =========================================================
+# LOCAL DEVELOPMENT / TEMPORARY BACKUPS
+# =========================================================
+
+*.backup-*
+permission-request.json

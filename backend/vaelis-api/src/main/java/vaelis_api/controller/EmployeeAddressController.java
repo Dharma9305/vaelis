@@ -3,6 +3,7 @@ package vaelis_api.controller;
 import vaelis_api.dto.EmployeeAddressRequest;
 import vaelis_api.dto.EmployeeAddressResponse;
 import vaelis_api.entity.EmployeeAddress;
+import vaelis_api.service.EmployeeAddressConflictException;
 import vaelis_api.service.EmployeeAddressManagementService;
 
 import org.springframework.http.HttpStatus;
@@ -55,7 +56,14 @@ public class EmployeeAddressController {
                         .collect(Collectors.toList())
         );
     }
+@ExceptionHandler(EmployeeAddressConflictException.class)
+public ResponseEntity<String> handleAddressConflict(
+        EmployeeAddressConflictException exception) {
 
+    return ResponseEntity
+            .status(HttpStatus.CONFLICT)
+            .body(exception.getMessage());
+}
     // =========================================================
     // GET ACTIVE ADDRESSES
     // =========================================================

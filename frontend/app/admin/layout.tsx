@@ -11,6 +11,7 @@ import {
   Users,
   Package,
   LogOut,
+  
   Trash2,
 } from "lucide-react";
 
@@ -414,6 +415,11 @@ export default function AdminLayout({
       profile,
       "PRODUCTS_VIEW"
     );
+    const canViewEmployees =
+  hasAdminPermission(
+    profile,
+    "EMPLOYEE_RECORDS_VIEW"
+  );
 
   const canViewOrders =
     hasAdminPermission(
@@ -513,7 +519,26 @@ export default function AdminLayout({
                 Orders
               </Link>
             )}
+            {/* EMPLOYEES */}
 
+{canViewEmployees && (
+  <Link
+    href="/admin/employees"
+    className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm transition ${
+      pathname.startsWith(
+        "/admin/employees"
+      )
+        ? "bg-white text-black"
+        : "text-white/60 hover:bg-white/5 hover:text-white"
+    }`}
+  >
+    <Users
+      size={16}
+    />
+
+    Employees
+  </Link>
+)}
             {/* ACCOUNT MANAGEMENT */}
 
             {hasAdminPermission(

@@ -1,5 +1,4 @@
 package vaelis_api.service;
-
 import vaelis_api.dto.EmployeeAddressRequest;
 import vaelis_api.entity.EmployeeAddress;
 import vaelis_api.entity.EmployeeRecord;
@@ -217,11 +216,11 @@ public class EmployeeAddressManagementService {
                         addressType
                 )) {
 
-            throw new IllegalStateException(
-                    "An address of type "
-                            + addressType
-                            + " already exists for this employee."
-            );
+            throw new EmployeeAddressConflictException(
+        "An address of type "
+                + addressType
+                + " already exists for this employee."
+);
         }
 
         EmployeeAddress address =

@@ -32,3 +32,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# =========================================================
+# LOCAL DEVELOPMENT / TEMPORARY BACKUPS
+# =========================================================
+
+permission-request.json
+*.backup-*

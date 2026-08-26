@@ -78,7 +78,40 @@ type Employee = {
 
   profileStatus: string | null;
 };
+type EmployeeEmploymentHistory = {
+  id: number;
+  employeeId: number;
 
+  companyName: string;
+  companyLocation: string | null;
+  industry: string | null;
+
+  jobTitle: string;
+  designation: string | null;
+  department: string | null;
+  employmentType: string | null;
+
+  startDate: string | null;
+  endDate: string | null;
+
+  lastDrawnDesignation: string | null;
+  lastDrawnSalary: number | null;
+
+  reasonForLeaving: string | null;
+
+  reportingManager: string | null;
+  hrContactName: string | null;
+  hrContactEmail: string | null;
+  hrContactMobile: string | null;
+
+  verificationStatus: string;
+  verificationReference: string | null;
+
+  active: boolean;
+
+  createdAt: string | null;
+  updatedAt: string | null;
+};
 type LifecycleHistory = {
   id: number;
   employeeId: number;
@@ -132,6 +165,30 @@ type EmployeeAddress = {
 
   active: boolean;
 };
+type EmployeeEmergencyContact = {
+  id: number;
+  employeeId: number;
+
+  contactName: string;
+  relationship: string;
+
+  primaryMobile: string;
+  alternateMobile: string | null;
+  email: string | null;
+
+  addressLine1: string | null;
+  addressLine2: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  postalCode: string | null;
+
+  primary: boolean;
+  active: boolean;
+
+  createdAt: string | null;
+  updatedAt: string | null;
+};
 
 type EmployeeEducation = {
   id: number;
@@ -181,6 +238,36 @@ type EmployeeSkill = {
   verificationStatus: string;
   verificationReference: string | null;
   active: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+type EmployeeDocument = {
+  id: number;
+  employeeId: number;
+
+  documentType: string;
+  documentCategory: string | null;
+  documentName: string;
+
+  documentNumber: string | null;
+  documentReference: string | null;
+
+  fileReference: string | null;
+  originalFileName: string | null;
+  contentType: string | null;
+  fileSizeBytes: number | null;
+
+  issueDate: string | null;
+  expiryDate: string | null;
+
+  verificationStatus: string;
+  verifiedBy: string | null;
+  verifiedAt: string | null;
+  verificationNotes: string | null;
+
+  active: boolean;
+
   createdAt: string | null;
   updatedAt: string | null;
 };
@@ -958,43 +1045,30 @@ export default function Employee360Page() {
           )}
 
           {activeTab ===
-            "documents" && (
-            <PlaceholderTab
-              icon={
-                <FileText
-                  size={28}
-                />
-              }
-              title="Documents"
-              description="Employee documents will be displayed here."
-            />
-          )}
+  "documents" && (
+  <DocumentsTab
+    employeeId={
+      employeeId
+    }
+    profile={profile}
+  />
+)}
 
           {activeTab ===
-            "emergency" && (
-            <PlaceholderTab
-              icon={
-                <Phone
-                  size={28}
-                />
-              }
-              title="Emergency Contacts"
-              description="Emergency contact records will be displayed here."
-            />
-          )}
+  "emergency" && (
+  <EmergencyContactsTab
+    employeeId={employeeId}
+    profile={profile}
+  />
+)}
 
           {activeTab ===
-            "employment-history" && (
-            <PlaceholderTab
-              icon={
-                <BriefcaseBusiness
-                  size={28}
-                />
-              }
-              title="Employment History"
-              description="Employee employment history will be displayed here."
-            />
-          )}
+  "employment-history" && (
+  <EmploymentHistoryTab
+    employeeId={employeeId}
+    profile={profile}
+  />
+)}
 
           {activeTab ===
             "lifecycle-history" && (
@@ -5050,6 +5124,1420 @@ function LifecycleHistoryTab({
     </div>
   );
 }
+/* =========================================================
+   DOCUMENTS
+========================================================= */
+
+function DocumentsTab({
+  employeeId,
+  profile,
+}: {
+  employeeId: string | null;
+  profile: AdminProfile | null;
+}) {
+
+  const [
+    documents,
+    setDocuments,
+  ] = useState<EmployeeDocument[]>([]);
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    saving,
+    setSaving,
+  ] = useState(false);
+
+  const [
+    deletingId,
+    setDeletingId,
+  ] = useState<number | null>(null);
+
+  const [
+    error,
+    setError,
+  ] = useState("");
+
+  const [
+    showForm,
+    setShowForm,
+  ] = useState(false);
+
+  const [
+    editingId,
+    setEditingId,
+  ] = useState<number | null>(null);
+
+  const emptyForm = {
+    documentType: "",
+    documentCategory: "",
+    documentName: "",
+    documentNumber: "",
+    documentReference: "",
+    fileReference: "",
+    originalFileName: "",
+    contentType: "",
+    fileSizeBytes: "",
+    issueDate: "",
+    expiryDate: "",
+    verificationStatus: "PENDING",
+    verificationNotes: "",
+    active: true,
+  };
+
+  const [
+    form,
+    setForm,
+  ] = useState(emptyForm);
+
+  // =======================================================
+  // PERMISSIONS
+  // =======================================================
+
+  const canView =
+    hasAdminPermission(
+      profile,
+      "EMPLOYEE_DOCUMENT_VIEW"
+    );
+
+  const canCreate =
+    hasAdminPermission(
+      profile,
+      "EMPLOYEE_DOCUMENT_CREATE"
+    );
+
+  const canUpdate =
+    hasAdminPermission(
+      profile,
+      "EMPLOYEE_DOCUMENT_UPDATE"
+    );
+
+  const canDelete =
+    hasAdminPermission(
+      profile,
+      "EMPLOYEE_DOCUMENT_DELETE"
+    );
+
+  // =======================================================
+  // LOAD DOCUMENTS
+  // =======================================================
+
+  async function loadDocuments() {
+
+    if (
+      !employeeId ||
+      !canView
+    ) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+
+      const authHeader =
+        getAdminAuthHeader();
+
+      if (!authHeader) {
+        throw new Error(
+          "Administrator authentication is missing."
+        );
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/admin/employees/${employeeId}/documents`,
+          {
+            method: "GET",
+
+            headers: {
+              Authorization:
+                authHeader,
+
+              Accept:
+                "application/json",
+            },
+
+            cache:
+              "no-store",
+          }
+        );
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          `Unable to load documents (${response.status}).`
+        );
+      }
+
+      const data =
+        await response.json();
+
+      setDocuments(
+        Array.isArray(data)
+          ? data
+          : []
+      );
+
+    } catch (err) {
+
+      console.error(
+        "Unable to load employee documents:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load employee documents."
+      );
+
+    } finally {
+
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+
+    loadDocuments();
+
+  }, [
+    employeeId,
+    canView,
+  ]);
+
+  // =======================================================
+  // FORM
+  // =======================================================
+
+  function updateForm(
+    field: keyof typeof form,
+    value: string | boolean
+  ) {
+
+    setForm(
+      (current) => ({
+        ...current,
+        [field]: value,
+      })
+    );
+  }
+
+  function resetForm() {
+
+    setForm({
+      ...emptyForm,
+    });
+
+    setEditingId(null);
+    setShowForm(false);
+  }
+
+  function startAdd() {
+
+    setError("");
+
+    setForm({
+      ...emptyForm,
+    });
+
+    setEditingId(null);
+    setShowForm(true);
+  }
+
+  function startEdit(
+    document: EmployeeDocument
+  ) {
+
+    setError("");
+
+    setForm({
+
+      documentType:
+        document.documentType ||
+        "",
+
+      documentCategory:
+        document.documentCategory ||
+        "",
+
+      documentName:
+        document.documentName ||
+        "",
+
+      documentNumber:
+        document.documentNumber ||
+        "",
+
+      documentReference:
+        document.documentReference ||
+        "",
+
+      fileReference:
+        document.fileReference ||
+        "",
+
+      originalFileName:
+        document.originalFileName ||
+        "",
+
+      contentType:
+        document.contentType ||
+        "",
+
+      fileSizeBytes:
+        document.fileSizeBytes != null
+          ? String(
+              document.fileSizeBytes
+            )
+          : "",
+
+      issueDate:
+        document.issueDate ||
+        "",
+
+      expiryDate:
+        document.expiryDate ||
+        "",
+
+      verificationStatus:
+        document.verificationStatus ||
+        "PENDING",
+
+      verificationNotes:
+        document.verificationNotes ||
+        "",
+
+      active:
+        document.active,
+    });
+
+    setEditingId(
+      document.id
+    );
+
+    setShowForm(true);
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
+  // =======================================================
+  // SAVE DOCUMENT
+  // =======================================================
+
+  async function submitDocument(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+
+    event.preventDefault();
+
+    if (!employeeId) {
+      return;
+    }
+
+    if (
+      editingId !== null &&
+      !canUpdate
+    ) {
+      return;
+    }
+
+    if (
+      editingId === null &&
+      !canCreate
+    ) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+
+      const authHeader =
+        getAdminAuthHeader();
+
+      if (!authHeader) {
+        throw new Error(
+          "Administrator authentication is missing."
+        );
+      }
+
+      // ===================================================
+      // VALIDATE DATES
+      // ===================================================
+
+      if (
+        form.issueDate &&
+        form.expiryDate &&
+        form.expiryDate <
+          form.issueDate
+      ) {
+        throw new Error(
+          "Expiry date cannot be before issue date."
+        );
+      }
+
+      // ===================================================
+      // FILE SIZE
+      // ===================================================
+
+      const fileSizeBytes =
+        form.fileSizeBytes.trim()
+          ? Number(
+              form.fileSizeBytes
+            )
+          : null;
+
+      if (
+        fileSizeBytes !== null &&
+        (
+          !Number.isFinite(
+            fileSizeBytes
+          ) ||
+          fileSizeBytes < 0
+        )
+      ) {
+        throw new Error(
+          "File size must be a valid non-negative number."
+        );
+      }
+
+      // ===================================================
+      // PAYLOAD
+      // ===================================================
+
+      const payload = {
+
+        documentType:
+          form.documentType.trim(),
+
+        documentCategory:
+          form.documentCategory.trim() ||
+          null,
+
+        documentName:
+          form.documentName.trim(),
+
+        documentNumber:
+          form.documentNumber.trim() ||
+          null,
+
+        documentReference:
+          form.documentReference.trim() ||
+          null,
+
+        fileReference:
+          form.fileReference.trim() ||
+          null,
+
+        originalFileName:
+          form.originalFileName.trim() ||
+          null,
+
+        contentType:
+          form.contentType.trim() ||
+          null,
+
+        fileSizeBytes,
+
+        issueDate:
+          form.issueDate ||
+          null,
+
+        expiryDate:
+          form.expiryDate ||
+          null,
+
+        verificationStatus:
+          form.verificationStatus,
+
+        verificationNotes:
+          form.verificationNotes.trim() ||
+          null,
+
+        active:
+          form.active,
+      };
+
+      // ===================================================
+      // URL
+      // ===================================================
+
+      const url =
+        editingId !== null
+          ? `${API_BASE_URL}/api/admin/employees/${employeeId}/documents/${editingId}`
+          : `${API_BASE_URL}/api/admin/employees/${employeeId}/documents`;
+
+      // ===================================================
+      // REQUEST
+      // ===================================================
+
+      const response =
+        await fetch(
+          url,
+          {
+            method:
+              editingId !== null
+                ? "PUT"
+                : "POST",
+
+            headers: {
+              Authorization:
+                authHeader,
+
+              Accept:
+                "application/json",
+
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify(
+                payload
+              ),
+          }
+        );
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          `Unable to ${
+            editingId !== null
+              ? "update"
+              : "create"
+          } document (${response.status}).`
+        );
+      }
+
+      resetForm();
+
+      await loadDocuments();
+
+    } catch (err) {
+
+      console.error(
+        "Unable to save employee document:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to save employee document."
+      );
+
+    } finally {
+
+      setSaving(false);
+    }
+  }
+
+  // =======================================================
+  // DELETE DOCUMENT
+  // =======================================================
+
+  async function deleteDocument(
+    documentId: number
+  ) {
+
+    if (
+      !employeeId ||
+      !canDelete
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        "Are you sure you want to delete this document?"
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingId(
+      documentId
+    );
+
+    setError("");
+
+    try {
+
+      const authHeader =
+        getAdminAuthHeader();
+
+      if (!authHeader) {
+        throw new Error(
+          "Administrator authentication is missing."
+        );
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/admin/employees/${employeeId}/documents/${documentId}`,
+          {
+            method: "DELETE",
+
+            headers: {
+              Authorization:
+                authHeader,
+
+              Accept:
+                "application/json",
+            },
+          }
+        );
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          `Unable to delete document (${response.status}).`
+        );
+      }
+
+      if (
+        editingId ===
+        documentId
+      ) {
+        resetForm();
+      }
+
+      await loadDocuments();
+
+    } catch (err) {
+
+      console.error(
+        "Unable to delete employee document:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to delete employee document."
+      );
+
+    } finally {
+
+      setDeletingId(
+        null
+      );
+    }
+  }
+
+  // =======================================================
+  // PERMISSION
+  // =======================================================
+
+  if (!canView) {
+
+    return (
+      <PlaceholderTab
+        icon={
+          <FileText
+            size={28}
+          />
+        }
+        title="Documents"
+        description="You do not have permission to view employee documents."
+      />
+    );
+  }
+
+  // =======================================================
+  // LOADING
+  // =======================================================
+
+  if (loading) {
+
+    return (
+      <div className="flex items-center justify-center rounded-3xl border border-white/10 bg-white/[0.02] py-20 text-white/40">
+
+        <Loader2
+          size={20}
+          className="mr-3 animate-spin"
+        />
+
+        Loading documents...
+
+      </div>
+    );
+  }
+
+  // =======================================================
+  // UI
+  // =======================================================
+
+  return (
+    <div className="space-y-5">
+
+      {/* =================================================
+          HEADER
+      ================================================= */}
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+        <div>
+
+          <h2 className="text-lg font-medium">
+            Documents
+          </h2>
+
+          <p className="mt-1 text-sm text-white/35">
+            Employee identity, compliance,
+            qualification and other
+            document records.
+          </p>
+
+        </div>
+
+        <div className="flex items-center gap-2">
+
+          <button
+            type="button"
+            onClick={() =>
+              loadDocuments()
+            }
+            className="flex items-center gap-2 rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/60 transition hover:border-white/20 hover:text-white"
+          >
+
+            <RefreshCw
+              size={15}
+            />
+
+            Refresh
+
+          </button>
+
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() =>
+                showForm
+                  ? resetForm()
+                  : startAdd()
+              }
+              className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition hover:bg-white/90"
+            >
+
+              {showForm
+                ? "Cancel"
+                : "+ Add Document"}
+
+            </button>
+          )}
+
+        </div>
+
+      </div>
+
+      {/* =================================================
+          ERROR
+      ================================================= */}
+
+      {error && (
+        <div className="flex items-start justify-between gap-4 rounded-2xl border border-red-400/20 bg-red-400/5 px-5 py-4 text-sm text-red-300">
+
+          <span>
+            {error}
+          </span>
+
+          <button
+            type="button"
+            onClick={() =>
+              setError("")
+            }
+            className="text-red-300/60 hover:text-red-300"
+          >
+
+            <X
+              size={16}
+            />
+
+          </button>
+
+        </div>
+      )}
+
+      {/* =================================================
+          FORM
+      ================================================= */}
+
+      {showForm && (
+
+        <form
+          onSubmit={
+            submitDocument
+          }
+          className="rounded-3xl border border-white/10 bg-white/[0.02] p-6"
+        >
+
+          <div className="mb-6">
+
+            <h3 className="text-base font-medium">
+
+              {editingId !== null
+                ? "Edit Document"
+                : "Add Employee Document"}
+
+            </h3>
+
+            <p className="mt-1 text-sm text-white/35">
+
+              {editingId !== null
+                ? "Update the document metadata and save your changes."
+                : "Enter the employee document details."}
+
+            </p>
+
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-2">
+
+            <DocumentInput
+              label="Document Type"
+              value={
+                form.documentType
+              }
+              onChange={(
+                value
+              ) =>
+                updateForm(
+                  "documentType",
+                  value
+                )
+              }
+              required
+              placeholder="AADHAAR / PAN / PASSPORT"
+            />
+
+            <DocumentInput
+              label="Document Category"
+              value={
+                form.documentCategory
+              }
+              onChange={(
+                value
+              ) =>
+                updateForm(
+                  "documentCategory",
+                  value
+                )
+              }
+              placeholder="Identity / Compliance"
+            />
+
+            <DocumentInput
+              label="Document Name"
+              value={
+                form.documentName
+              }
+              onChange={(
+                value
+              ) =>
+                updateForm(
+                  "documentName",
+                  value
+                )
+              }
+              required
+              placeholder="Aadhaar Card"
+            />
+
+            <DocumentInput
+              label="Document Number"
+              value={
+                form.documentNumber
+              }
+              onChange={(
+                value
+              ) =>
+                updateForm(
+                  "documentNumber",
+                  value
+                )
+              }
+              placeholder="Document number"
+            />
+
+            <DocumentInput
+              label="Document Reference"
+              value={
+                form.documentReference
+              }
+              onChange={(
+                value
+              ) =>
+                updateForm(
+                  "documentReference",
+                  value
+                )
+              }
+              placeholder="Internal reference"
+            />
+
+            <DocumentInput
+              label="File Reference"
+              value={
+                form.fileReference
+              }
+              onChange={(
+                value
+              ) =>
+                updateForm(
+                  "fileReference",
+                  value
+                )
+              }
+              placeholder="Storage reference / URL"
+            />
+
+            <DocumentInput
+              label="Original File Name"
+              value={
+                form.originalFileName
+              }
+              onChange={(
+                value
+              ) =>
+                updateForm(
+                  "originalFileName",
+                  value
+                )
+              }
+              placeholder="aadhaar.pdf"
+            />
+
+            <DocumentInput
+              label="Content Type"
+              value={
+                form.contentType
+              }
+              onChange={(
+                value
+              ) =>
+                updateForm(
+                  "contentType",
+                  value
+                )
+              }
+              placeholder="application/pdf"
+            />
+
+            <DocumentInput
+              label="File Size (Bytes)"
+              value={
+                form.fileSizeBytes
+              }
+              onChange={(
+                value
+              ) =>
+                updateForm(
+                  "fileSizeBytes",
+                  value
+                )
+              }
+              type="number"
+              placeholder="102400"
+            />
+
+            <DocumentInput
+              label="Issue Date"
+              value={
+                form.issueDate
+              }
+              onChange={(
+                value
+              ) =>
+                updateForm(
+                  "issueDate",
+                  value
+                )
+              }
+              type="date"
+            />
+
+            <DocumentInput
+              label="Expiry Date"
+              value={
+                form.expiryDate
+              }
+              onChange={(
+                value
+              ) =>
+                updateForm(
+                  "expiryDate",
+                  value
+                )
+              }
+              type="date"
+            />
+
+            <DocumentInput
+              label="Verification Status"
+              value={
+                form.verificationStatus
+              }
+              onChange={(
+                value
+              ) =>
+                updateForm(
+                  "verificationStatus",
+                  value
+                )
+              }
+              placeholder="PENDING / VERIFIED"
+            />
+
+            <div className="md:col-span-2">
+
+              <label className="mb-2 block text-xs uppercase tracking-wider text-white/35">
+
+                Verification Notes
+
+              </label>
+
+              <textarea
+                value={
+                  form.verificationNotes
+                }
+                onChange={(
+                  event
+                ) =>
+                  updateForm(
+                    "verificationNotes",
+                    event.target.value
+                  )
+                }
+                rows={4}
+                placeholder="Verification remarks"
+                className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
+              />
+
+            </div>
+
+            <label className="flex items-center gap-3 self-end pb-1 text-sm text-white/60">
+
+              <input
+                type="checkbox"
+                checked={
+                  form.active
+                }
+                onChange={(
+                  event
+                ) =>
+                  updateForm(
+                    "active",
+                    event.target
+                      .checked
+                  )
+                }
+                className="h-4 w-4 rounded border-white/20 bg-black"
+              />
+
+              Active document
+
+            </label>
+
+          </div>
+
+          <div className="mt-6 flex justify-end gap-3 border-t border-white/5 pt-5">
+
+            <button
+              type="button"
+              onClick={() =>
+                resetForm()
+              }
+              disabled={saving}
+              className="rounded-full border border-white/10 px-5 py-2.5 text-sm text-white/55 transition hover:text-white disabled:opacity-50"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+
+              {saving && (
+                <Loader2
+                  size={15}
+                  className="animate-spin"
+                />
+              )}
+
+              {saving
+                ? "Saving..."
+                : editingId !== null
+                  ? "Save Changes"
+                  : "Save Document"}
+
+            </button>
+
+          </div>
+
+        </form>
+      )}
+
+      {/* =================================================
+          LIST
+      ================================================= */}
+
+      {documents.length === 0 ? (
+
+        <PlaceholderTab
+          icon={
+            <FileText
+              size={28}
+            />
+          }
+          title="No Documents"
+          description="No document records have been added for this employee."
+        />
+
+      ) : (
+
+        <div className="grid gap-5 md:grid-cols-2">
+
+          {documents.map(
+            (document) => (
+
+              <div
+                key={document.id}
+                className="rounded-3xl border border-white/10 bg-white/[0.02] p-6"
+              >
+
+                <div className="flex items-start justify-between gap-4">
+
+                  <div>
+
+                    <div className="flex items-center gap-2">
+
+                      <FileText
+                        size={18}
+                        className="text-white/40"
+                      />
+
+                      <h3 className="font-medium">
+                        {
+                          document.documentName
+                        }
+                      </h3>
+
+                    </div>
+
+                    <p className="mt-1 text-sm text-white/40">
+                      {
+                        document.documentType
+                      }
+
+                      {document.documentCategory &&
+                        ` · ${document.documentCategory}`}
+                    </p>
+
+                  </div>
+
+                  <span className="text-xs text-white/20">
+                    #{document.id}
+                  </span>
+
+                </div>
+
+                <div className="mt-5 space-y-2 text-sm">
+
+                  <DocumentDetail
+                    label="Document Number"
+                    value={
+                      document.documentNumber
+                    }
+                  />
+
+                  <DocumentDetail
+                    label="Reference"
+                    value={
+                      document.documentReference
+                    }
+                  />
+
+                  <DocumentDetail
+                    label="File"
+                    value={
+                      document.originalFileName
+                    }
+                  />
+
+                  <DocumentDetail
+                    label="Content Type"
+                    value={
+                      document.contentType
+                    }
+                  />
+
+                  <DocumentDetail
+                    label="Issue Date"
+                    value={formatDate(
+                      document.issueDate
+                    )}
+                  />
+
+                  <DocumentDetail
+                    label="Expiry Date"
+                    value={formatDate(
+                      document.expiryDate
+                    )}
+                  />
+
+                  <DocumentDetail
+                    label="Verified By"
+                    value={
+                      document.verifiedBy
+                    }
+                  />
+
+                  <DocumentDetail
+                    label="Verified At"
+                    value={formatDateTime(
+                      document.verifiedAt
+                    )}
+                  />
+
+                  <DocumentDetail
+                    label="Verification Notes"
+                    value={
+                      document.verificationNotes
+                    }
+                  />
+
+                </div>
+
+                <div className="mt-5 flex items-center justify-between border-t border-white/5 pt-4">
+
+                  <div className="flex items-center gap-2">
+
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-wider ${
+                        document.verificationStatus ===
+                        "VERIFIED"
+                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                          : "border-yellow-500/20 bg-yellow-500/10 text-yellow-300"
+                      }`}
+                    >
+
+                      {
+                        document.verificationStatus
+                      }
+
+                    </span>
+
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-wider ${
+                        document.active
+                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                          : "border-white/10 bg-white/5 text-white/30"
+                      }`}
+                    >
+
+                      {document.active
+                        ? "Active"
+                        : "Inactive"}
+
+                    </span>
+
+                  </div>
+
+                  {(canUpdate ||
+                    canDelete) && (
+
+                    <div className="flex items-center gap-2">
+
+                      {canUpdate && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            startEdit(
+                              document
+                            )
+                          }
+                          disabled={
+                            deletingId !==
+                            null
+                          }
+                          className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/50 transition hover:text-white disabled:opacity-50"
+                        >
+                          Edit
+                        </button>
+                      )}
+
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deleteDocument(
+                              document.id
+                            )
+                          }
+                          disabled={
+                            deletingId ===
+                            document.id
+                          }
+                          className="flex items-center gap-2 rounded-full border border-red-400/10 px-4 py-2 text-xs text-red-300/70 transition hover:text-red-300 disabled:opacity-50"
+                        >
+
+                          {deletingId ===
+                            document.id && (
+                            <Loader2
+                              size={12}
+                              className="animate-spin"
+                            />
+                          )}
+
+                          {deletingId ===
+                          document.id
+                            ? "Deleting..."
+                            : "Delete"}
+
+                        </button>
+                      )}
+
+                    </div>
+                  )}
+
+                </div>
+
+              </div>
+            )
+          )}
+
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+/* =========================================================
+   DOCUMENT INPUT
+========================================================= */
+
+function DocumentInput({
+  label,
+  value,
+  onChange,
+  required = false,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (
+    value: string
+  ) => void;
+  required?: boolean;
+  placeholder?: string;
+  type?:
+    | "text"
+    | "number"
+    | "date";
+}) {
+
+  return (
+    <div>
+
+      <label className="mb-2 block text-xs uppercase tracking-wider text-white/35">
+
+        {label}
+
+        {required && (
+          <span className="ml-1 text-red-300">
+            *
+          </span>
+        )}
+
+      </label>
+
+      <input
+        type={type}
+        value={value}
+        onChange={(
+          event
+        ) =>
+          onChange(
+            event.target.value
+          )
+        }
+        required={required}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
+      />
+
+    </div>
+  );
+}
+
+/* =========================================================
+   DOCUMENT DETAIL
+========================================================= */
+
+function DocumentDetail({
+  label,
+  value,
+}: {
+  label: string;
+  value:
+    | string
+    | number
+    | null
+    | undefined;
+}) {
+
+  if (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    value === "—"
+  ) {
+    return null;
+  }
+
+  return (
+    <div className="flex items-start justify-between gap-4 border-b border-white/[0.04] pb-2 last:border-0">
+
+      <span className="text-xs text-white/30">
+        {label}
+      </span>
+
+      <span className="max-w-[65%] text-right text-sm text-white/65 break-words">
+        {value}
+      </span>
+
+    </div>
+  );
+}
 
 /* =========================================================
    CHANGE ROW
@@ -5172,8 +6660,2850 @@ function InfoRow({
 
     </div>
   );
+  
+}
+function EmergencyContactsTab({
+  employeeId,
+  profile,
+}: {
+  employeeId: string | null;
+  profile: AdminProfile | null;
+}) {
+  const [contacts, setContacts] =
+    useState<EmployeeEmergencyContact[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [showForm, setShowForm] =
+    useState(false);
+
+  const [editingId, setEditingId] =
+    useState<number | null>(null);
+
+  const [form, setForm] = useState({
+    contactName: "",
+    relationship: "",
+    primaryMobile: "",
+    alternateMobile: "",
+    email: "",
+
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    state: "",
+    country: "India",
+    postalCode: "",
+
+    primary: false,
+    active: true,
+  });
+
+  // =========================================================
+  // PERMISSIONS
+  // =========================================================
+
+  const canView =
+    hasAdminPermission(
+      profile,
+      "EMPLOYEE_EMERGENCY_CONTACT_VIEW"
+    );
+
+  const canCreate =
+    hasAdminPermission(
+      profile,
+      "EMPLOYEE_EMERGENCY_CONTACT_CREATE"
+    );
+
+  const canUpdate =
+    hasAdminPermission(
+      profile,
+      "EMPLOYEE_EMERGENCY_CONTACT_UPDATE"
+    );
+
+  const canDelete =
+    hasAdminPermission(
+      profile,
+      "EMPLOYEE_EMERGENCY_CONTACT_DELETE"
+    );
+
+  // =========================================================
+  // RESET FORM
+  // =========================================================
+
+  function resetForm() {
+    setForm({
+      contactName: "",
+      relationship: "",
+      primaryMobile: "",
+      alternateMobile: "",
+      email: "",
+
+      addressLine1: "",
+      addressLine2: "",
+      city: "",
+      state: "",
+      country: "India",
+      postalCode: "",
+
+      primary: false,
+      active: true,
+    });
+
+    setEditingId(null);
+  }
+
+  // =========================================================
+  // LOAD CONTACTS
+  // =========================================================
+
+  async function loadContacts() {
+    if (!employeeId || !canView) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const authHeader =
+        getAdminAuthHeader();
+
+      if (!authHeader) {
+        throw new Error(
+          "Administrator authentication is missing."
+        );
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/admin/employees/${employeeId}/emergency-contacts`,
+          {
+            method: "GET",
+
+            headers: {
+              Authorization:
+                authHeader,
+
+              Accept:
+                "application/json",
+            },
+
+            cache:
+              "no-store",
+          }
+        );
+
+      if (!response.ok) {
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          `Unable to load emergency contacts (${response.status}).`
+        );
+      }
+
+      const data =
+        await response.json();
+
+      setContacts(
+        Array.isArray(data)
+          ? data
+          : []
+      );
+    } catch (err) {
+      console.error(
+        "Unable to load emergency contacts:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load emergency contacts."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // =========================================================
+  // EFFECT
+  // =========================================================
+
+  useEffect(() => {
+    loadContacts();
+  }, [
+    employeeId,
+    canView,
+  ]);
+
+  // =========================================================
+  // FORM FIELD UPDATE
+  // =========================================================
+
+  function updateForm(
+    field:
+      | "contactName"
+      | "relationship"
+      | "primaryMobile"
+      | "alternateMobile"
+      | "email"
+      | "addressLine1"
+      | "addressLine2"
+      | "city"
+      | "state"
+      | "country"
+      | "postalCode"
+      | "primary"
+      | "active",
+    value: string | boolean
+  ) {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  // =========================================================
+  // START ADD
+  // =========================================================
+
+  function startAdd() {
+    resetForm();
+    setError("");
+    setShowForm(true);
+  }
+
+  // =========================================================
+  // START EDIT
+  // =========================================================
+
+  function startEdit(
+    contact: EmployeeEmergencyContact
+  ) {
+    setError("");
+
+    setEditingId(
+      contact.id
+    );
+
+    setForm({
+      contactName:
+        contact.contactName || "",
+
+      relationship:
+        contact.relationship || "",
+
+      primaryMobile:
+        contact.primaryMobile || "",
+
+      alternateMobile:
+        contact.alternateMobile || "",
+
+      email:
+        contact.email || "",
+
+      addressLine1:
+        contact.addressLine1 || "",
+
+      addressLine2:
+        contact.addressLine2 || "",
+
+      city:
+        contact.city || "",
+
+      state:
+        contact.state || "",
+
+      country:
+        contact.country || "India",
+
+      postalCode:
+        contact.postalCode || "",
+
+      primary:
+        contact.primary,
+
+      active:
+        contact.active,
+    });
+
+    setShowForm(true);
+  }
+
+  // =========================================================
+  // CANCEL FORM
+  // =========================================================
+
+  function cancelForm() {
+    if (saving) {
+      return;
+    }
+
+    setShowForm(false);
+    resetForm();
+    setError("");
+  }
+
+  // =========================================================
+  // SAVE
+  // =========================================================
+
+  async function submitContact(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    if (!employeeId) {
+      return;
+    }
+
+    if (
+      editingId === null &&
+      !canCreate
+    ) {
+      return;
+    }
+
+    if (
+      editingId !== null &&
+      !canUpdate
+    ) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const authHeader =
+        getAdminAuthHeader();
+
+      if (!authHeader) {
+        throw new Error(
+          "Administrator authentication is missing."
+        );
+      }
+
+      const url =
+        editingId === null
+          ? `${API_BASE_URL}/api/admin/employees/${employeeId}/emergency-contacts`
+          : `${API_BASE_URL}/api/admin/employees/${employeeId}/emergency-contacts/${editingId}`;
+
+      const method =
+        editingId === null
+          ? "POST"
+          : "PUT";
+
+      const response =
+        await fetch(
+          url,
+          {
+            method,
+
+            headers: {
+              Authorization:
+                authHeader,
+
+              Accept:
+                "application/json",
+
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify(
+                form
+              ),
+          }
+        );
+
+      if (!response.ok) {
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          `Unable to ${
+            editingId === null
+              ? "create"
+              : "update"
+          } emergency contact (${response.status}).`
+        );
+      }
+
+      setShowForm(false);
+
+      resetForm();
+
+      await loadContacts();
+    } catch (err) {
+      console.error(
+        "Unable to save employee emergency contact:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to save emergency contact."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // =========================================================
+  // DELETE
+  // =========================================================
+
+  async function deleteContact(
+    contact: EmployeeEmergencyContact
+  ) {
+    if (
+      !employeeId ||
+      !canDelete
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Delete emergency contact "${contact.contactName}"?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError("");
+
+    try {
+      const authHeader =
+        getAdminAuthHeader();
+
+      if (!authHeader) {
+        throw new Error(
+          "Administrator authentication is missing."
+        );
+      }
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/admin/employees/${employeeId}/emergency-contacts/${contact.id}`,
+          {
+            method: "DELETE",
+
+            headers: {
+              Authorization:
+                authHeader,
+
+              Accept:
+                "application/json",
+            },
+          }
+        );
+
+      if (!response.ok) {
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          `Unable to delete emergency contact (${response.status}).`
+        );
+      }
+
+      await loadContacts();
+    } catch (err) {
+      console.error(
+        "Unable to delete employee emergency contact:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to delete emergency contact."
+      );
+    }
+  }
+
+  // =========================================================
+  // PERMISSION
+  // =========================================================
+
+  if (!canView) {
+    return (
+      <PlaceholderTab
+        icon={
+          <Phone size={28} />
+        }
+        title="Emergency Contacts"
+        description="You do not have permission to view employee emergency contacts."
+      />
+    );
+  }
+
+  // =========================================================
+  // LOADING
+  // =========================================================
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center rounded-3xl border border-white/10 bg-white/[0.02] py-20 text-white/40">
+        <Loader2
+          size={20}
+          className="mr-3 animate-spin"
+        />
+        Loading emergency contacts...
+      </div>
+    );
+  }
+
+  // =========================================================
+  // RENDER
+  // =========================================================
+
+  return (
+    <div className="space-y-5">
+
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+        <div>
+
+          <h2 className="text-lg font-medium">
+            Emergency Contacts
+          </h2>
+
+          <p className="mt-1 text-sm text-white/35">
+            Manage employee emergency and
+            family contact records.
+          </p>
+
+        </div>
+
+        <div className="flex items-center gap-2">
+
+          <button
+            type="button"
+            onClick={() =>
+              loadContacts()
+            }
+            className="flex items-center gap-2 rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/60 transition hover:border-white/20 hover:text-white"
+          >
+            <RefreshCw size={15} />
+            Refresh
+          </button>
+
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() =>
+                showForm
+                  ? cancelForm()
+                  : startAdd()
+              }
+              disabled={saving}
+              className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition hover:bg-white/90 disabled:opacity-50"
+            >
+              {showForm
+                ? "Cancel"
+                : "+ Add Contact"}
+            </button>
+          )}
+
+        </div>
+
+      </div>
+
+      {/* =====================================================
+          ERROR
+      ===================================================== */}
+
+      {error && (
+        <div className="flex items-start justify-between gap-4 rounded-2xl border border-red-400/20 bg-red-400/5 px-5 py-4 text-sm text-red-300">
+
+          <span>
+            {error}
+          </span>
+
+          <button
+            type="button"
+            onClick={() =>
+              setError("")
+            }
+            className="text-red-300/60 hover:text-red-300"
+          >
+            <X size={16} />
+          </button>
+
+        </div>
+      )}
+
+      {/* =====================================================
+          FORM
+      ===================================================== */}
+
+      {showForm && (
+        <form
+          onSubmit={
+            submitContact
+          }
+          className="rounded-3xl border border-white/10 bg-white/[0.02] p-6"
+        >
+
+          <div className="mb-6">
+
+            <h3 className="text-base font-medium">
+              {editingId === null
+                ? "Add Emergency Contact"
+                : "Edit Emergency Contact"}
+            </h3>
+
+            <p className="mt-1 text-sm text-white/35">
+              Enter the emergency contact details.
+            </p>
+
+          </div>
+
+          {/* =================================================
+              CONTACT
+          ================================================= */}
+
+          <div className="grid gap-5 md:grid-cols-2">
+
+            <EmergencyInput
+              label="Contact Name"
+              value={
+                form.contactName
+              }
+              onChange={(value) =>
+                updateForm(
+                  "contactName",
+                  value
+                )
+              }
+              required
+              placeholder="Rahul Sharma"
+            />
+
+            <EmergencyInput
+              label="Relationship"
+              value={
+                form.relationship
+              }
+              onChange={(value) =>
+                updateForm(
+                  "relationship",
+                  value
+                )
+              }
+              required
+              placeholder="Father / Mother / Spouse"
+            />
+
+            <EmergencyInput
+              label="Primary Mobile"
+              value={
+                form.primaryMobile
+              }
+              onChange={(value) =>
+                updateForm(
+                  "primaryMobile",
+                  value
+                )
+              }
+              required
+              placeholder="9876543210"
+            />
+
+            <EmergencyInput
+              label="Alternate Mobile"
+              value={
+                form.alternateMobile
+              }
+              onChange={(value) =>
+                updateForm(
+                  "alternateMobile",
+                  value
+                )
+              }
+              placeholder="Optional"
+            />
+
+            <EmergencyInput
+              label="Email"
+              type="email"
+              value={
+                form.email
+              }
+              onChange={(value) =>
+                updateForm(
+                  "email",
+                  value
+                )
+              }
+              placeholder="contact@example.com"
+            />
+
+          </div>
+
+          {/* =================================================
+              ADDRESS
+          ================================================= */}
+
+          <div className="mt-8">
+
+            <h4 className="mb-4 text-sm font-medium text-white/70">
+              Address
+            </h4>
+
+            <div className="grid gap-5 md:grid-cols-2">
+
+              <div className="md:col-span-2">
+
+                <EmergencyInput
+                  label="Address Line 1"
+                  value={
+                    form.addressLine1
+                  }
+                  onChange={(value) =>
+                    updateForm(
+                      "addressLine1",
+                      value
+                    )
+                  }
+                  placeholder="House / Flat / Street"
+                />
+
+              </div>
+
+              <div className="md:col-span-2">
+
+                <EmergencyInput
+                  label="Address Line 2"
+                  value={
+                    form.addressLine2
+                  }
+                  onChange={(value) =>
+                    updateForm(
+                      "addressLine2",
+                      value
+                    )
+                  }
+                  placeholder="Area / Locality"
+                />
+
+              </div>
+
+              <EmergencyInput
+                label="City"
+                value={
+                  form.city
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "city",
+                    value
+                  )
+                }
+                placeholder="Delhi"
+              />
+
+              <EmergencyInput
+                label="State"
+                value={
+                  form.state
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "state",
+                    value
+                  )
+                }
+                placeholder="Delhi"
+              />
+
+              <EmergencyInput
+                label="Country"
+                value={
+                  form.country
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "country",
+                    value
+                  )
+                }
+                placeholder="India"
+              />
+
+              <EmergencyInput
+                label="Postal Code"
+                value={
+                  form.postalCode
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "postalCode",
+                    value
+                  )
+                }
+                placeholder="110001"
+              />
+
+            </div>
+
+          </div>
+
+          {/* =================================================
+              STATUS
+          ================================================= */}
+
+          <div className="mt-6 flex flex-col gap-4 rounded-2xl border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center">
+
+            <label className="flex items-center gap-3 text-sm text-white/60">
+
+              <input
+                type="checkbox"
+                checked={
+                  form.primary
+                }
+                onChange={(event) =>
+                  updateForm(
+                    "primary",
+                    event.target.checked
+                  )
+                }
+                className="h-4 w-4 rounded border-white/20 bg-black"
+              />
+
+              Primary emergency contact
+
+            </label>
+
+            <label className="flex items-center gap-3 text-sm text-white/60">
+
+              <input
+                type="checkbox"
+                checked={
+                  form.active
+                }
+                onChange={(event) =>
+                  updateForm(
+                    "active",
+                    event.target.checked
+                  )
+                }
+                className="h-4 w-4 rounded border-white/20 bg-black"
+              />
+
+              Active contact
+
+            </label>
+
+          </div>
+
+          <p className="mt-3 text-xs text-white/25">
+            Setting this contact as primary will automatically
+            remove the primary status from the employee's
+            existing primary emergency contact.
+          </p>
+
+          {/* =================================================
+              FORM ACTIONS
+          ================================================= */}
+
+          <div className="mt-6 flex justify-end gap-3 border-t border-white/5 pt-5">
+
+            <button
+              type="button"
+              onClick={
+                cancelForm
+              }
+              disabled={saving}
+              className="rounded-full border border-white/10 px-5 py-2.5 text-sm text-white/55 transition hover:text-white disabled:opacity-50"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+
+              {saving && (
+                <Loader2
+                  size={15}
+                  className="animate-spin"
+                />
+              )}
+
+              {saving
+                ? "Saving..."
+                : editingId === null
+                  ? "Save Contact"
+                  : "Update Contact"}
+
+            </button>
+
+          </div>
+
+        </form>
+      )}
+
+      {/* =====================================================
+          EMPTY
+      ===================================================== */}
+
+      {contacts.length === 0 ? (
+        <PlaceholderTab
+          icon={
+            <Phone size={28} />
+          }
+          title="No Emergency Contacts"
+          description="No emergency contact records have been added for this employee."
+        />
+      ) : (
+
+        /* ===================================================
+           CONTACT CARDS
+        =================================================== */
+
+        <div className="grid gap-5 md:grid-cols-2">
+
+          {contacts.map(
+            (contact) => (
+
+              <div
+                key={
+                  contact.id
+                }
+                className="rounded-3xl border border-white/10 bg-white/[0.02] p-6"
+              >
+
+                {/* =========================================
+                    CARD HEADER
+                ========================================= */}
+
+                <div className="flex items-start justify-between gap-4">
+
+                  <div className="min-w-0">
+
+                    <div className="flex flex-wrap items-center gap-2">
+
+                      <div className="flex items-center gap-2">
+
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/40">
+
+                          <Phone
+                            size={16}
+                          />
+
+                        </div>
+
+                        <h3 className="font-medium">
+                          {
+                            contact.contactName
+                          }
+                        </h3>
+
+                      </div>
+
+                    </div>
+
+                    <p className="mt-2 text-sm text-white/40">
+                      {
+                        contact.relationship
+                      }
+                    </p>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+
+                      {contact.primary && (
+                        <span className="inline-flex rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-emerald-300">
+                          Primary
+                        </span>
+                      )}
+
+                      <span
+                        className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-wider ${
+                          contact.active
+                            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                            : "border-white/10 bg-white/5 text-white/30"
+                        }`}
+                      >
+                        {contact.active
+                          ? "Active"
+                          : "Inactive"}
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                  <span className="shrink-0 text-xs text-white/20">
+                    #{contact.id}
+                  </span>
+
+                </div>
+
+                {/* =========================================
+                    CONTACT DETAILS
+                ========================================= */}
+
+                <div className="mt-6 space-y-3 text-sm">
+
+                  <div className="flex items-center justify-between gap-4 border-b border-white/[0.05] pb-3">
+
+                    <span className="text-xs text-white/30">
+                      Primary Mobile
+                    </span>
+
+                    <span className="text-right text-white/70">
+                      {
+                        contact.primaryMobile ||
+                        "—"
+                      }
+                    </span>
+
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 border-b border-white/[0.05] pb-3">
+
+                    <span className="text-xs text-white/30">
+                      Alternate Mobile
+                    </span>
+
+                    <span className="text-right text-white/70">
+                      {
+                        contact.alternateMobile ||
+                        "—"
+                      }
+                    </span>
+
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4 border-b border-white/[0.05] pb-3">
+
+                    <span className="text-xs text-white/30">
+                      Email
+                    </span>
+
+                    <span className="break-all text-right text-white/70">
+                      {
+                        contact.email ||
+                        "—"
+                      }
+                    </span>
+
+                  </div>
+
+                </div>
+
+                {/* =========================================
+                    ADDRESS
+                ========================================= */}
+
+                {(contact.addressLine1 ||
+                  contact.addressLine2 ||
+                  contact.city ||
+                  contact.state ||
+                  contact.country ||
+                  contact.postalCode) && (
+
+                  <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+
+                    <div className="flex items-center gap-2">
+
+                      <MapPin
+                        size={15}
+                        className="text-white/30"
+                      />
+
+                      <span className="text-xs uppercase tracking-wider text-white/30">
+                        Address
+                      </span>
+
+                    </div>
+
+                    <div className="mt-3 space-y-1 text-sm text-white/55">
+
+                      {contact.addressLine1 && (
+                        <p>
+                          {
+                            contact.addressLine1
+                          }
+                        </p>
+                      )}
+
+                      {contact.addressLine2 && (
+                        <p>
+                          {
+                            contact.addressLine2
+                          }
+                        </p>
+                      )}
+
+                      {(contact.city ||
+                        contact.state) && (
+                        <p>
+                          {[
+                            contact.city,
+                            contact.state,
+                          ]
+                            .filter(
+                              Boolean
+                            )
+                            .join(", ")}
+                        </p>
+                      )}
+
+                      {(contact.country ||
+                        contact.postalCode) && (
+                        <p>
+                          {[
+                            contact.country,
+                            contact.postalCode,
+                          ]
+                            .filter(
+                              Boolean
+                            )
+                            .join(" — ")}
+                        </p>
+                      )}
+
+                    </div>
+
+                  </div>
+                )}
+
+                {/* =========================================
+                    ACTIONS
+                ========================================= */}
+
+                {(canUpdate ||
+                  canDelete) && (
+
+                  <div className="mt-6 flex justify-end gap-2 border-t border-white/5 pt-4">
+
+                    {canUpdate && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          startEdit(
+                            contact
+                          )
+                        }
+                        disabled={saving}
+                        className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/50 transition hover:text-white disabled:opacity-50"
+                      >
+                        Edit
+                      </button>
+                    )}
+
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          deleteContact(
+                            contact
+                          )
+                        }
+                        disabled={saving}
+                        className="rounded-full border border-red-400/10 px-4 py-2 text-xs text-red-300/70 transition hover:border-red-400/20 hover:text-red-300 disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    )}
+
+                  </div>
+                )}
+
+              </div>
+            )
+          )}
+
+        </div>
+      )}
+
+    </div>
+  );
+}
+function EmergencyInput({
+  label,
+  value,
+  onChange,
+  required = false,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <div>
+
+      <label className="mb-2 block text-xs uppercase tracking-wider text-white/35">
+
+        {label}
+
+        {required && (
+          <span className="ml-1 text-red-300">
+            *
+          </span>
+        )}
+
+      </label>
+
+      <input
+        type={type}
+        value={value}
+        onChange={(event) =>
+          onChange(
+            event.target.value
+          )
+        }
+        required={required}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
+      />
+
+    </div>
+  );
+}
+/* =========================================================
+   EMPLOYMENT HISTORY TAB
+========================================================= */
+
+function EmploymentHistoryTab({
+  employeeId,
+  profile,
+}: {
+  employeeId: string | null;
+  profile: AdminProfile | null;
+}) {
+
+  const [history, setHistory] =
+    useState<EmployeeEmploymentHistory[]>(
+      []
+    );
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [showForm, setShowForm] =
+    useState(false);
+
+  const [editingId, setEditingId] =
+    useState<number | null>(null);
+
+  const [form, setForm] =
+    useState({
+      companyName: "",
+      companyLocation: "",
+      industry: "",
+
+      jobTitle: "",
+      designation: "",
+      department: "",
+      employmentType: "",
+
+      startDate: "",
+      endDate: "",
+
+      lastDrawnDesignation: "",
+      lastDrawnSalary: "",
+
+      reasonForLeaving: "",
+
+      reportingManager: "",
+      hrContactName: "",
+      hrContactEmail: "",
+      hrContactMobile: "",
+
+      verificationStatus: "PENDING",
+      verificationReference: "",
+
+      active: true,
+    });
+
+  /* =======================================================
+     PERMISSIONS
+  ======================================================= */
+
+  const canView =
+    hasAdminPermission(
+      profile,
+      "EMPLOYEE_EMPLOYMENT_HISTORY_VIEW"
+    );
+
+  const canCreate =
+    hasAdminPermission(
+      profile,
+      "EMPLOYEE_EMPLOYMENT_HISTORY_CREATE"
+    );
+
+  const canUpdate =
+    hasAdminPermission(
+      profile,
+      "EMPLOYEE_EMPLOYMENT_HISTORY_UPDATE"
+    );
+
+  const canDelete =
+    hasAdminPermission(
+      profile,
+      "EMPLOYEE_EMPLOYMENT_HISTORY_DELETE"
+    );
+
+  /* =======================================================
+     RESET FORM
+  ======================================================= */
+
+  function resetForm() {
+
+    setForm({
+      companyName: "",
+      companyLocation: "",
+      industry: "",
+
+      jobTitle: "",
+      designation: "",
+      department: "",
+      employmentType: "",
+
+      startDate: "",
+      endDate: "",
+
+      lastDrawnDesignation: "",
+      lastDrawnSalary: "",
+
+      reasonForLeaving: "",
+
+      reportingManager: "",
+      hrContactName: "",
+      hrContactEmail: "",
+      hrContactMobile: "",
+
+      verificationStatus: "PENDING",
+      verificationReference: "",
+
+      active: true,
+    });
+
+    setEditingId(null);
+  }
+
+  /* =======================================================
+     FORM OPEN
+  ======================================================= */
+
+  function openCreateForm() {
+
+    resetForm();
+
+    setShowForm(true);
+
+    setError("");
+  }
+
+  /* =======================================================
+     FORM UPDATE
+  ======================================================= */
+
+  function updateForm(
+    field: keyof typeof form,
+    value: string | boolean
+  ) {
+
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  /* =======================================================
+     AUTH HEADER
+  ======================================================= */
+
+  function getAuthHeader(): string {
+
+    const authHeader =
+      getAdminAuthHeader();
+
+    if (!authHeader) {
+
+      throw new Error(
+        "Administrator authentication is missing."
+      );
+    }
+
+    return authHeader;
+  }
+
+  /* =======================================================
+     LOAD HISTORY
+  ======================================================= */
+
+  async function loadHistory() {
+
+    if (
+      !employeeId ||
+      !canView
+    ) {
+
+      setLoading(false);
+
+      return;
+    }
+
+    setLoading(true);
+
+    setError("");
+
+    try {
+
+      const authHeader =
+        getAuthHeader();
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/admin/employees/${employeeId}/employment-history`,
+          {
+            method: "GET",
+
+            headers: {
+              Authorization:
+                authHeader,
+
+              Accept:
+                "application/json",
+            },
+
+            cache:
+              "no-store",
+          }
+        );
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          `Unable to load employment history (${response.status}).`
+        );
+      }
+
+      const data =
+        await response.json();
+
+      setHistory(
+        Array.isArray(data)
+          ? data
+          : []
+      );
+
+    } catch (err) {
+
+      console.error(
+        "Unable to load employment history:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to load employment history."
+      );
+
+    } finally {
+
+      setLoading(false);
+    }
+  }
+
+  /* =======================================================
+     CREATE / UPDATE
+  ======================================================= */
+
+  async function submitHistory(
+    event: React.FormEvent<HTMLFormElement>
+  ) {
+
+    event.preventDefault();
+
+    if (!employeeId) {
+      return;
+    }
+
+    if (
+      editingId !== null &&
+      !canUpdate
+    ) {
+      return;
+    }
+
+    if (
+      editingId === null &&
+      !canCreate
+    ) {
+      return;
+    }
+
+    setSaving(true);
+
+    setError("");
+
+    try {
+
+      const authHeader =
+        getAuthHeader();
+
+      if (
+        form.endDate &&
+        form.startDate &&
+        form.endDate <
+          form.startDate
+      ) {
+
+        throw new Error(
+          "End date cannot be before start date."
+        );
+      }
+
+      const salary =
+        form.lastDrawnSalary.trim() === ""
+          ? null
+          : Number(
+              form.lastDrawnSalary
+            );
+
+      if (
+        salary !== null &&
+        Number.isNaN(salary)
+      ) {
+
+        throw new Error(
+          "Last drawn salary must be a valid number."
+        );
+      }
+
+      if (
+        salary !== null &&
+        salary < 0
+      ) {
+
+        throw new Error(
+          "Last drawn salary cannot be negative."
+        );
+      }
+
+      const payload = {
+        companyName:
+          form.companyName.trim(),
+
+        companyLocation:
+          form.companyLocation.trim() ||
+          null,
+
+        industry:
+          form.industry.trim() ||
+          null,
+
+        jobTitle:
+          form.jobTitle.trim(),
+
+        designation:
+          form.designation.trim() ||
+          null,
+
+        department:
+          form.department.trim() ||
+          null,
+
+        employmentType:
+          form.employmentType.trim() ||
+          null,
+
+        startDate:
+          form.startDate ||
+          null,
+
+        endDate:
+          form.endDate ||
+          null,
+
+        lastDrawnDesignation:
+          form.lastDrawnDesignation.trim() ||
+          null,
+
+        lastDrawnSalary:
+          salary,
+
+        reasonForLeaving:
+          form.reasonForLeaving.trim() ||
+          null,
+
+        reportingManager:
+          form.reportingManager.trim() ||
+          null,
+
+        hrContactName:
+          form.hrContactName.trim() ||
+          null,
+
+        hrContactEmail:
+          form.hrContactEmail.trim() ||
+          null,
+
+        hrContactMobile:
+          form.hrContactMobile.trim() ||
+          null,
+
+        verificationStatus:
+          form.verificationStatus,
+
+        verificationReference:
+          form.verificationReference.trim() ||
+          null,
+
+        active:
+          form.active,
+      };
+
+      const url =
+        editingId === null
+          ? `${API_BASE_URL}/api/admin/employees/${employeeId}/employment-history`
+          : `${API_BASE_URL}/api/admin/employees/${employeeId}/employment-history/${editingId}`;
+
+      const response =
+        await fetch(
+          url,
+          {
+            method:
+              editingId === null
+                ? "POST"
+                : "PUT",
+
+            headers: {
+              Authorization:
+                authHeader,
+
+              Accept:
+                "application/json",
+
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify(
+                payload
+              ),
+          }
+        );
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          `Unable to save employment history (${response.status}).`
+        );
+      }
+
+      resetForm();
+
+      setShowForm(false);
+
+      await loadHistory();
+
+    } catch (err) {
+
+      console.error(
+        "Unable to save employment history:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to save employment history."
+      );
+
+    } finally {
+
+      setSaving(false);
+    }
+  }
+
+  /* =======================================================
+     EDIT
+  ======================================================= */
+
+  function startEdit(
+    item: EmployeeEmploymentHistory
+  ) {
+
+    if (!canUpdate) {
+      return;
+    }
+
+    setEditingId(
+      item.id
+    );
+
+    setForm({
+      companyName:
+        item.companyName || "",
+
+      companyLocation:
+        item.companyLocation || "",
+
+      industry:
+        item.industry || "",
+
+      jobTitle:
+        item.jobTitle || "",
+
+      designation:
+        item.designation || "",
+
+      department:
+        item.department || "",
+
+      employmentType:
+        item.employmentType || "",
+
+      startDate:
+        item.startDate || "",
+
+      endDate:
+        item.endDate || "",
+
+      lastDrawnDesignation:
+        item.lastDrawnDesignation || "",
+
+      lastDrawnSalary:
+        item.lastDrawnSalary === null ||
+        item.lastDrawnSalary === undefined
+          ? ""
+          : String(
+              item.lastDrawnSalary
+            ),
+
+      reasonForLeaving:
+        item.reasonForLeaving || "",
+
+      reportingManager:
+        item.reportingManager || "",
+
+      hrContactName:
+        item.hrContactName || "",
+
+      hrContactEmail:
+        item.hrContactEmail || "",
+
+      hrContactMobile:
+        item.hrContactMobile || "",
+
+      verificationStatus:
+        item.verificationStatus ||
+        "PENDING",
+
+      verificationReference:
+        item.verificationReference || "",
+
+      active:
+        item.active,
+    });
+
+    setShowForm(true);
+
+    setError("");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
+  /* =======================================================
+     DELETE
+  ======================================================= */
+
+  async function deleteHistory(
+    item: EmployeeEmploymentHistory
+  ) {
+
+    if (
+      !employeeId ||
+      !canDelete
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Delete employment history for ${item.companyName}?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError("");
+
+    try {
+
+      const authHeader =
+        getAuthHeader();
+
+      const response =
+        await fetch(
+          `${API_BASE_URL}/api/admin/employees/${employeeId}/employment-history/${item.id}`,
+          {
+            method: "DELETE",
+
+            headers: {
+              Authorization:
+                authHeader,
+
+              Accept:
+                "application/json",
+            },
+
+            cache:
+              "no-store",
+          }
+        );
+
+      if (!response.ok) {
+
+        const message =
+          await response.text();
+
+        throw new Error(
+          message ||
+          `Unable to delete employment history (${response.status}).`
+        );
+      }
+
+      await loadHistory();
+
+    } catch (err) {
+
+      console.error(
+        "Unable to delete employment history:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Unable to delete employment history."
+      );
+    }
+  }
+
+  /* =======================================================
+     LOAD
+  ======================================================= */
+
+  useEffect(() => {
+
+    loadHistory();
+
+  }, [
+    employeeId,
+    canView,
+  ]);
+
+  /* =======================================================
+     PERMISSION
+  ======================================================= */
+
+  if (!canView) {
+
+    return (
+      <PlaceholderTab
+        icon={
+          <BriefcaseBusiness
+            size={28}
+          />
+        }
+        title="Employment History"
+        description="You do not have permission to view employee employment history."
+      />
+    );
+  }
+
+  /* =======================================================
+     LOADING
+  ======================================================= */
+
+  if (loading) {
+
+    return (
+      <div className="flex items-center justify-center rounded-3xl border border-white/10 bg-white/[0.02] py-20 text-white/40">
+
+        <Loader2
+          size={20}
+          className="mr-3 animate-spin"
+        />
+
+        Loading employment history...
+
+      </div>
+    );
+  }
+
+  /* =======================================================
+     UI
+  ======================================================= */
+
+  return (
+    <div className="space-y-5">
+
+      {/* ===================================================
+          HEADER
+      =================================================== */}
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+        <div>
+
+          <h2 className="text-lg font-medium">
+            Employment History
+          </h2>
+
+          <p className="mt-1 text-sm text-white/35">
+            Previous employers, positions,
+            employment periods and verification
+            records.
+          </p>
+
+        </div>
+
+        <div className="flex items-center gap-2">
+
+          <button
+            type="button"
+            onClick={() =>
+              loadHistory()
+            }
+            className="flex items-center gap-2 rounded-full border border-white/10 px-4 py-2.5 text-sm text-white/60 transition hover:border-white/20 hover:text-white"
+          >
+
+            <RefreshCw size={15} />
+
+            Refresh
+
+          </button>
+
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() =>
+                showForm
+                  ? (
+                      resetForm(),
+                      setShowForm(false)
+                    )
+                  : openCreateForm()
+              }
+              className="rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition hover:bg-white/90"
+            >
+              {showForm
+                ? "Cancel"
+                : "+ Add Employment"}
+            </button>
+          )}
+
+        </div>
+
+      </div>
+
+      {/* ===================================================
+          ERROR
+      =================================================== */}
+
+      {error && (
+        <div className="flex items-start justify-between gap-4 rounded-2xl border border-red-400/20 bg-red-400/5 px-5 py-4 text-sm text-red-300">
+
+          <span>
+            {error}
+          </span>
+
+          <button
+            type="button"
+            onClick={() =>
+              setError("")
+            }
+            className="text-red-300/60 hover:text-red-300"
+          >
+
+            <X size={16} />
+
+          </button>
+
+        </div>
+      )}
+
+      {/* ===================================================
+          FORM
+      =================================================== */}
+
+      {showForm && (
+        <form
+          onSubmit={submitHistory}
+          className="rounded-3xl border border-white/10 bg-white/[0.02] p-6"
+        >
+
+          <div className="mb-6">
+
+            <h3 className="text-base font-medium">
+
+              {editingId === null
+                ? "Add Employment History"
+                : "Edit Employment History"}
+
+            </h3>
+
+            <p className="mt-1 text-sm text-white/35">
+              Enter the previous employment
+              details.
+            </p>
+
+          </div>
+
+          {/* ORGANIZATION */}
+
+          <div className="mb-7">
+
+            <p className="mb-4 text-xs uppercase tracking-wider text-white/25">
+              Organization
+            </p>
+
+            <div className="grid gap-5 md:grid-cols-2">
+
+              <EmploymentInput
+                label="Company Name"
+                value={
+                  form.companyName
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "companyName",
+                    value
+                  )
+                }
+                required
+                placeholder="ABC Technologies Pvt Ltd"
+              />
+
+              <EmploymentInput
+                label="Company Location"
+                value={
+                  form.companyLocation
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "companyLocation",
+                    value
+                  )
+                }
+                placeholder="Gurugram, Haryana"
+              />
+
+              <EmploymentInput
+                label="Industry"
+                value={
+                  form.industry
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "industry",
+                    value
+                  )
+                }
+                placeholder="Information Technology"
+              />
+
+              <EmploymentInput
+                label="Employment Type"
+                value={
+                  form.employmentType
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "employmentType",
+                    value
+                  )
+                }
+                placeholder="FULL_TIME"
+              />
+
+            </div>
+
+          </div>
+
+          {/* POSITION */}
+
+          <div className="mb-7">
+
+            <p className="mb-4 text-xs uppercase tracking-wider text-white/25">
+              Position
+            </p>
+
+            <div className="grid gap-5 md:grid-cols-2">
+
+              <EmploymentInput
+                label="Job Title"
+                value={
+                  form.jobTitle
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "jobTitle",
+                    value
+                  )
+                }
+                required
+                placeholder="Senior Software Engineer"
+              />
+
+              <EmploymentInput
+                label="Designation"
+                value={
+                  form.designation
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "designation",
+                    value
+                  )
+                }
+                placeholder="Technical Lead"
+              />
+
+              <EmploymentInput
+                label="Department"
+                value={
+                  form.department
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "department",
+                    value
+                  )
+                }
+                placeholder="Engineering"
+              />
+
+              <EmploymentInput
+                label="Last Drawn Designation"
+                value={
+                  form.lastDrawnDesignation
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "lastDrawnDesignation",
+                    value
+                  )
+                }
+                placeholder="Technical Lead"
+              />
+
+            </div>
+
+          </div>
+
+          {/* PERIOD */}
+
+          <div className="mb-7">
+
+            <p className="mb-4 text-xs uppercase tracking-wider text-white/25">
+              Employment Period
+            </p>
+
+            <div className="grid gap-5 md:grid-cols-2">
+
+              <EmploymentInput
+                label="Start Date"
+                type="date"
+                value={
+                  form.startDate
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "startDate",
+                    value
+                  )
+                }
+              />
+
+              <EmploymentInput
+                label="End Date"
+                type="date"
+                value={
+                  form.endDate
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "endDate",
+                    value
+                  )
+                }
+              />
+
+              <EmploymentInput
+                label="Last Drawn Salary"
+                type="number"
+                value={
+                  form.lastDrawnSalary
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "lastDrawnSalary",
+                    value
+                  )
+                }
+                placeholder="850000"
+              />
+
+              <EmploymentInput
+                label="Reason For Leaving"
+                value={
+                  form.reasonForLeaving
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "reasonForLeaving",
+                    value
+                  )
+                }
+                placeholder="Career growth"
+              />
+
+            </div>
+
+          </div>
+
+          {/* CONTACT */}
+
+          <div className="mb-7">
+
+            <p className="mb-4 text-xs uppercase tracking-wider text-white/25">
+              Previous Employer Contacts
+            </p>
+
+            <div className="grid gap-5 md:grid-cols-2">
+
+              <EmploymentInput
+                label="Reporting Manager"
+                value={
+                  form.reportingManager
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "reportingManager",
+                    value
+                  )
+                }
+                placeholder="Manager name"
+              />
+
+              <EmploymentInput
+                label="HR Contact Name"
+                value={
+                  form.hrContactName
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "hrContactName",
+                    value
+                  )
+                }
+                placeholder="HR name"
+              />
+
+              <EmploymentInput
+                label="HR Contact Email"
+                type="email"
+                value={
+                  form.hrContactEmail
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "hrContactEmail",
+                    value
+                  )
+                }
+                placeholder="hr@example.com"
+              />
+
+              <EmploymentInput
+                label="HR Contact Mobile"
+                value={
+                  form.hrContactMobile
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "hrContactMobile",
+                    value
+                  )
+                }
+                placeholder="9876543210"
+              />
+
+            </div>
+
+          </div>
+
+          {/* VERIFICATION */}
+
+          <div>
+
+            <p className="mb-4 text-xs uppercase tracking-wider text-white/25">
+              Verification
+            </p>
+
+            <div className="grid gap-5 md:grid-cols-2">
+
+              <div>
+
+                <label className="mb-2 block text-xs uppercase tracking-wider text-white/35">
+                  Verification Status
+                </label>
+
+                <select
+                  value={
+                    form.verificationStatus
+                  }
+                  onChange={(event) =>
+                    updateForm(
+                      "verificationStatus",
+                      event.target.value
+                    )
+                  }
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-white/30"
+                >
+
+                  <option value="PENDING">
+                    PENDING
+                  </option>
+
+                  <option value="VERIFIED">
+                    VERIFIED
+                  </option>
+
+                  <option value="REJECTED">
+                    REJECTED
+                  </option>
+
+                </select>
+
+              </div>
+
+              <EmploymentInput
+                label="Verification Reference"
+                value={
+                  form.verificationReference
+                }
+                onChange={(value) =>
+                  updateForm(
+                    "verificationReference",
+                    value
+                  )
+                }
+                placeholder="Reference / verification ID"
+              />
+
+              <label className="flex items-center gap-3 self-end pb-1 text-sm text-white/60">
+
+                <input
+                  type="checkbox"
+                  checked={
+                    form.active
+                  }
+                  onChange={(event) =>
+                    updateForm(
+                      "active",
+                      event.target.checked
+                    )
+                  }
+                  className="h-4 w-4 rounded border-white/20 bg-black"
+                />
+
+                Active employment record
+
+              </label>
+
+            </div>
+
+          </div>
+
+          {/* FORM ACTIONS */}
+
+          <div className="mt-7 flex justify-end gap-3 border-t border-white/5 pt-5">
+
+            <button
+              type="button"
+              onClick={() => {
+                resetForm();
+                setShowForm(false);
+              }}
+              disabled={saving}
+              className="rounded-full border border-white/10 px-5 py-2.5 text-sm text-white/55 transition hover:text-white disabled:opacity-50"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+
+              {saving && (
+                <Loader2
+                  size={15}
+                  className="animate-spin"
+                />
+              )}
+
+              {saving
+                ? "Saving..."
+                : editingId === null
+                  ? "Save Employment"
+                  : "Update Employment"}
+
+            </button>
+
+          </div>
+
+        </form>
+      )}
+
+      {/* ===================================================
+          EMPTY
+      =================================================== */}
+
+      {history.length === 0 ? (
+
+        <PlaceholderTab
+          icon={
+            <BriefcaseBusiness
+              size={28}
+            />
+          }
+          title="No Employment History"
+          description="No previous employment records have been added for this employee."
+        />
+
+      ) : (
+
+        <div className="space-y-5">
+
+          {history.map(
+            (item) => (
+
+              <div
+                key={item.id}
+                className="rounded-3xl border border-white/10 bg-white/[0.02] p-6"
+              >
+
+                {/* HEADER */}
+
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+
+                  <div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/40">
+
+                        <BriefcaseBusiness
+                          size={18}
+                        />
+
+                      </div>
+
+                      <div>
+
+                        <h3 className="font-medium text-white">
+
+                          {item.companyName}
+
+                        </h3>
+
+                        <p className="mt-1 text-sm text-white/40">
+
+                          {item.jobTitle}
+
+                          {item.designation
+                            ? ` • ${item.designation}`
+                            : ""}
+
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+
+                    <span
+                      className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-wider ${
+                        item.active
+                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                          : "border-white/10 bg-white/5 text-white/30"
+                      }`}
+                    >
+
+                      {item.active
+                        ? "Active"
+                        : "Inactive"}
+
+                    </span>
+
+                    <span
+                      className={`rounded-full border px-3 py-1 text-[10px] uppercase tracking-wider ${
+                        item.verificationStatus ===
+                        "VERIFIED"
+                          ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                          : item.verificationStatus ===
+                            "REJECTED"
+                            ? "border-red-500/20 bg-red-500/10 text-red-300"
+                            : "border-yellow-500/20 bg-yellow-500/10 text-yellow-300"
+                      }`}
+                    >
+
+                      {item.verificationStatus}
+
+                    </span>
+
+                  </div>
+
+                </div>
+
+                {/* DETAILS */}
+
+                <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+
+                  <EmploymentInfo
+                    label="Company Location"
+                    value={
+                      item.companyLocation
+                    }
+                  />
+
+                  <EmploymentInfo
+                    label="Industry"
+                    value={
+                      item.industry
+                    }
+                  />
+
+                  <EmploymentInfo
+                    label="Department"
+                    value={
+                      item.department
+                    }
+                  />
+
+                  <EmploymentInfo
+                    label="Employment Type"
+                    value={
+                      item.employmentType
+                    }
+                  />
+
+                  <EmploymentInfo
+                    label="Start Date"
+                    value={
+                      formatDate(
+                        item.startDate
+                      )
+                    }
+                  />
+
+                  <EmploymentInfo
+                    label="End Date"
+                    value={
+                      formatDate(
+                        item.endDate
+                      )
+                    }
+                  />
+
+                  <EmploymentInfo
+                    label="Last Drawn Designation"
+                    value={
+                      item.lastDrawnDesignation
+                    }
+                  />
+
+                  <EmploymentInfo
+                    label="Last Drawn Salary"
+                    value={
+                      item.lastDrawnSalary ===
+                      null
+                        ? null
+                        : String(
+                            item.lastDrawnSalary
+                          )
+                    }
+                  />
+
+                  <EmploymentInfo
+                    label="Reporting Manager"
+                    value={
+                      item.reportingManager
+                    }
+                  />
+
+                </div>
+
+                {/* REASON */}
+
+                {item.reasonForLeaving && (
+                  <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+
+                    <p className="text-[10px] uppercase tracking-wider text-white/25">
+                      Reason For Leaving
+                    </p>
+
+                    <p className="mt-2 text-sm text-white/60">
+                      {
+                        item.reasonForLeaving
+                      }
+                    </p>
+
+                  </div>
+                )}
+
+                {/* HR CONTACT */}
+
+                {(item.hrContactName ||
+                  item.hrContactEmail ||
+                  item.hrContactMobile) && (
+
+                  <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+
+                    <p className="text-[10px] uppercase tracking-wider text-white/25">
+                      HR Contact
+                    </p>
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-3">
+
+                      <EmploymentInfo
+                        label="Name"
+                        value={
+                          item.hrContactName
+                        }
+                      />
+
+                      <EmploymentInfo
+                        label="Email"
+                        value={
+                          item.hrContactEmail
+                        }
+                      />
+
+                      <EmploymentInfo
+                        label="Mobile"
+                        value={
+                          item.hrContactMobile
+                        }
+                      />
+
+                    </div>
+
+                  </div>
+                )}
+
+                {/* VERIFICATION */}
+
+                {item.verificationReference && (
+                  <div className="mt-5">
+
+                    <EmploymentInfo
+                      label="Verification Reference"
+                      value={
+                        item.verificationReference
+                      }
+                    />
+
+                  </div>
+                )}
+
+                {/* ACTIONS */}
+
+                {(canUpdate ||
+                  canDelete) && (
+
+                  <div className="mt-6 flex justify-end gap-2 border-t border-white/5 pt-4">
+
+                    {canUpdate && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          startEdit(item)
+                        }
+                        className="rounded-full border border-white/10 px-4 py-2 text-xs text-white/50 hover:text-white"
+                      >
+                        Edit
+                      </button>
+                    )}
+
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          deleteHistory(item)
+                        }
+                        className="rounded-full border border-red-400/10 px-4 py-2 text-xs text-red-300/70 hover:text-red-300"
+                      >
+                        Delete
+                      </button>
+                    )}
+
+                  </div>
+                )}
+
+              </div>
+            )
+          )}
+
+        </div>
+      )}
+
+    </div>
+  );
 }
 
+/* =========================================================
+   EMPLOYMENT INPUT
+========================================================= */
+
+function EmploymentInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+  required = false,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  required?: boolean;
+  placeholder?: string;
+}) {
+
+  return (
+    <div>
+
+      <label className="mb-2 block text-xs uppercase tracking-wider text-white/35">
+
+        {label}
+
+        {required && (
+          <span className="ml-1 text-red-300">
+            *
+          </span>
+        )}
+
+      </label>
+
+      <input
+        type={type}
+        value={value}
+        onChange={(event) =>
+          onChange(
+            event.target.value
+          )
+        }
+        required={required}
+        min={
+          type === "number"
+            ? "0"
+            : undefined
+        }
+        step={
+          type === "number"
+            ? "0.01"
+            : undefined
+        }
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-white/20 focus:border-white/30"
+      />
+
+    </div>
+  );
+}
+
+/* =========================================================
+   EMPLOYMENT INFO
+========================================================= */
+
+function EmploymentInfo({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null | undefined;
+}) {
+
+  return (
+    <div>
+
+      <p className="text-[10px] uppercase tracking-wider text-white/25">
+        {label}
+      </p>
+
+      <p className="mt-1 text-sm text-white/65">
+        {value || "—"}
+      </p>
+
+    </div>
+  );
+}
 /* =========================================================
    PLACEHOLDER
 ========================================================= */
