@@ -8,3 +8,12 @@ VAELIS_PHASE_*_STABLE_BACKUP.zip
 
 *.backup-*
 permission-request.json
+
+# =========================================================
+# LOCAL API TEST PAYLOADS
+# =========================================================
+
+account-manager-approve.json
+product-auth-test.json
+product-manage-request.json
+super-admin-approve.json
