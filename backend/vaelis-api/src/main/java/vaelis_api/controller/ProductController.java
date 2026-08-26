@@ -62,6 +62,13 @@ public class ProductController {
     // =========================================================
     // PUBLIC PRODUCTS
     // =========================================================
+    //
+    // Storefront endpoint.
+    //
+    // NO ADMIN PERMISSION REQUIRED.
+    //
+    // GET /api/products
+    // =========================================================
 
     @GetMapping
     public List<Product> getAllProducts() {
@@ -73,6 +80,13 @@ public class ProductController {
     // =========================================================
     // PUBLIC PRODUCT BY SLUG
     // =========================================================
+    //
+    // Storefront endpoint.
+    //
+    // NO ADMIN PERMISSION REQUIRED.
+    //
+    // GET /api/products/{slug}
+    // =========================================================
 
     @GetMapping("/{slug}")
     public ResponseEntity<Product>
@@ -82,6 +96,74 @@ public class ProductController {
         return productService
                 .getProductBySlug(slug)
                 .map(ResponseEntity::ok)
+                .orElseGet(() ->
+                        ResponseEntity
+                                .notFound()
+                                .build()
+                );
+    }
+
+    // =========================================================
+    // ADMIN PRODUCT LIST
+    // PRODUCTS_VIEW
+    // =========================================================
+    //
+    // GET /api/products/admin
+    //
+    // Separate from the public storefront endpoint.
+    // =========================================================
+
+    @GetMapping("/admin")
+    public ResponseEntity<?> getAdminProducts(
+            Authentication authentication) {
+
+        if (!adminAuthorizationService.hasPermission(
+                authentication,
+                "PRODUCTS_VIEW"
+        )) {
+
+            return ResponseEntity
+                    .status(HttpStatus.FORBIDDEN)
+                    .body(
+                            "PRODUCTS_VIEW permission required."
+                    );
+        }
+
+        return ResponseEntity.ok(
+                productService.getAllProducts()
+        );
+    }
+
+    // =========================================================
+    // ADMIN PRODUCT BY ID
+    // PRODUCTS_VIEW
+    // =========================================================
+    //
+    // GET /api/products/admin/{id}
+    // =========================================================
+
+    @GetMapping("/admin/{id}")
+    public ResponseEntity<?> getAdminProduct(
+            @PathVariable String id,
+            Authentication authentication) {
+
+        if (!adminAuthorizationService.hasPermission(
+                authentication,
+                "PRODUCTS_VIEW"
+        )) {
+
+            return ResponseEntity
+                    .status(HttpStatus.FORBIDDEN)
+                    .body(
+                            "PRODUCTS_VIEW permission required."
+                    );
+        }
+
+        return productService
+                .getProductById(id)
+                .map(product ->
+                        ResponseEntity.ok(product)
+                )
                 .orElseGet(() ->
                         ResponseEntity
                                 .notFound()

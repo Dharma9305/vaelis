@@ -54,6 +54,19 @@ public class ProductService {
     }
 
     // =========================
+    // GET PRODUCT BY ID
+    // ADMIN PRODUCT VIEW
+    // =========================
+
+    @Transactional(readOnly = true)
+    public Optional<Product> getProductById(
+            String id) {
+
+        return productRepository
+                .findById(id);
+    }
+
+    // =========================
     // CREATE PRODUCT
     // =========================
 
@@ -96,10 +109,6 @@ public class ProductService {
             );
         }
 
-        // =====================================================
-        // INVENTORY VALIDATION
-        // =====================================================
-
         normalizeInventory(product);
 
         prepareProductImages(product);
@@ -124,10 +133,6 @@ public class ProductService {
                                                 + id
                                 )
                         );
-
-        // =====================================================
-        // SLUG
-        // =====================================================
 
         if (updatedProduct.getSlug() == null ||
                 updatedProduct.getSlug().isBlank()) {
@@ -201,10 +206,6 @@ public class ProductService {
                         .getReviewCount()
         );
 
-        // =====================================================
-        // INVENTORY
-        // =====================================================
-
         Integer stockQuantity =
                 updatedProduct.getStockQuantity();
 
@@ -242,18 +243,6 @@ public class ProductService {
                 updatedProduct.getInStock() != null
         ) {
 
-            /*
-             * Backward compatibility with the
-             * existing admin product API.
-             *
-             * If the old UI sends only inStock:
-             *
-             * true  -> preserve existing quantity,
-             *          unless it is zero.
-             *
-             * false -> quantity becomes zero.
-             */
-
             if (Boolean.FALSE.equals(
                     updatedProduct.getInStock()
             )) {
@@ -282,10 +271,6 @@ public class ProductService {
 
         ensureInventoryDefaults(product);
 
-        // =====================================================
-        // COLLECTIONS
-        // =====================================================
-
         product.setColors(
                 updatedProduct.getColors()
         );
@@ -298,10 +283,6 @@ public class ProductService {
                 updatedProduct
                         .getSpecifications()
         );
-
-        // =====================================================
-        // REPLACE IMAGES SAFELY
-        // =====================================================
 
         product.getImages().clear();
 
@@ -327,17 +308,6 @@ public class ProductService {
 
     // =========================
     // UPDATE STOCK
-    // =========================
-    //
-    // Legacy endpoint:
-    //
-    // PATCH /api/products/admin/{id}/stock
-    //
-    // {
-    //     "inStock": true
-    // }
-    //
-    // Kept for backward compatibility.
     // =========================
 
     @Transactional
@@ -371,13 +341,6 @@ public class ProductService {
             Integer currentQuantity =
                     product.getStockQuantity();
 
-            /*
-             * Do not invent stock when enabling
-             * an existing product.
-             *
-             * Admin should use quantity management
-             * to add stock.
-             */
             if (currentQuantity == null ||
                     currentQuantity <= 0) {
 
@@ -553,17 +516,17 @@ public class ProductService {
         image.setProduct(product);
 
         if (image.getSortOrder() == null) {
+
             image.setSortOrder(
                     product.getImages().size()
             );
         }
 
         if (image.getPrimaryImage() == null) {
+
             image.setPrimaryImage(false);
         }
 
-        // If this image is primary,
-        // remove primary flag from others.
         if (Boolean.TRUE.equals(
                 image.getPrimaryImage())) {
 
@@ -767,7 +730,9 @@ public class ProductService {
                 product.getStockQuantity();
 
         if (quantity == null) {
+
             quantity = 0;
+
             product.setStockQuantity(0);
         }
 
@@ -775,6 +740,7 @@ public class ProductService {
                 product.getLowStockThreshold();
 
         if (threshold == null) {
+
             product.setLowStockThreshold(5);
         }
 
@@ -813,8 +779,11 @@ public class ProductService {
                     image.getPrimaryImage())) {
 
                 if (primaryFound) {
+
                     image.setPrimaryImage(false);
+
                 } else {
+
                     primaryFound = true;
                 }
             }

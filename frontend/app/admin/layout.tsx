@@ -258,15 +258,41 @@ export default function AdminLayout({
     }
 
     const superAdminOnlyRoute =
-      pathname.startsWith(
-        "/admin/admin-management"
-      ) ||
-      pathname.startsWith(
-        "/admin/admin-approvals"
-      ) ||
-      pathname.startsWith(
-        "/admin/deletion-requests"
-      );
+  pathname.startsWith(
+    "/admin/admin-management"
+  ) ||
+  pathname.startsWith(
+    "/admin/admin-approvals"
+  ) ||
+  pathname.startsWith(
+    "/admin/deletion-requests"
+  );
+
+const permissionRequestRoute =
+  pathname.startsWith(
+    "/admin/permission-requests"
+  );
+
+const canReviewPermissionRequests =
+  profile.role ===
+    "ACCOUNT_MANAGER" ||
+  profile.role ===
+    "SUPER_ADMIN";
+
+if (
+  permissionRequestRoute &&
+  !canReviewPermissionRequests
+) {
+  setCheckingRoutePermission(
+    false
+  );
+
+  router.replace(
+    "/admin"
+  );
+
+  return;
+}
 
     if (
       superAdminOnlyRoute &&
@@ -537,6 +563,31 @@ export default function AdminLayout({
     />
 
     Employees
+  </Link>
+)}
+{/* PERMISSION REQUESTS */}
+
+{(
+  profile?.role ===
+    "ACCOUNT_MANAGER" ||
+  profile?.role ===
+    "SUPER_ADMIN"
+) && (
+  <Link
+    href="/admin/permission-requests"
+    className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm transition ${
+      pathname.startsWith(
+        "/admin/permission-requests"
+      )
+        ? "bg-white text-black"
+        : "text-white/60 hover:bg-white/5 hover:text-white"
+    }`}
+  >
+    <ShieldCheck
+      size={16}
+    />
+
+    Permission Requests
   </Link>
 )}
             {/* ACCOUNT MANAGEMENT */}

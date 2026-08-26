@@ -1,5 +1,6 @@
 package vaelis_api.controller;
 
+import vaelis_api.dto.AdminPermissionRequestResponse;
 import vaelis_api.entity.AdminPermissionRequest;
 import vaelis_api.entity.AdminPermissionRequestStatus;
 import vaelis_api.service.AdminPermissionRequestService;
@@ -31,18 +32,6 @@ public class AdminPermissionRequestController {
     // =========================================================
     // CREATE REQUEST
     // =========================================================
-    //
-    // ADMIN / EMPLOYEE / ACCOUNT_MANAGER / SUPER_ADMIN
-    //
-    // Body:
-    //
-    // {
-    //   "targetUserId": 9,
-    //   "permissionId": 5,
-    //   "reason": "Required for finance operations"
-    // }
-    //
-    // =========================================================
 
     @PostMapping
     public ResponseEntity<?> createRequest(
@@ -62,7 +51,10 @@ public class AdminPermissionRequestController {
 
             return ResponseEntity
                     .status(HttpStatus.CREATED)
-                    .body(created);
+                    .body(
+                            AdminPermissionRequestResponse
+                                    .from(created)
+                    );
 
         } catch (SecurityException e) {
 
@@ -89,17 +81,26 @@ public class AdminPermissionRequestController {
     // =========================================================
 
     @GetMapping
-    public ResponseEntity<?> getAllRequests() {
+    public ResponseEntity<?> getAllRequests(
+            Authentication authentication) {
 
         try {
+
+            requireReviewRole(authentication);
 
             List<AdminPermissionRequest> requests =
                     permissionRequestService
                             .getAllRequests();
 
             return ResponseEntity.ok(
-                    requests
+                    toResponseList(requests)
             );
+
+        } catch (SecurityException e) {
+
+            return ResponseEntity
+                    .status(HttpStatus.FORBIDDEN)
+                    .body(e.getMessage());
 
         } catch (Exception e) {
 
@@ -107,9 +108,7 @@ public class AdminPermissionRequestController {
                     .status(
                             HttpStatus.INTERNAL_SERVER_ERROR
                     )
-                    .body(
-                            e.getMessage()
-                    );
+                    .body(e.getMessage());
         }
     }
 
@@ -119,16 +118,27 @@ public class AdminPermissionRequestController {
 
     @GetMapping("/{requestId}")
     public ResponseEntity<?> getRequest(
-            @PathVariable Long requestId) {
+            @PathVariable Long requestId,
+            Authentication authentication) {
 
         try {
 
-            return ResponseEntity.ok(
+            requireReviewRole(authentication);
+
+            AdminPermissionRequest request =
                     permissionRequestService
-                            .getRequest(
-                                    requestId
-                            )
+                            .getRequest(requestId);
+
+            return ResponseEntity.ok(
+                    AdminPermissionRequestResponse
+                            .from(request)
             );
+
+        } catch (SecurityException e) {
+
+            return ResponseEntity
+                    .status(HttpStatus.FORBIDDEN)
+                    .body(e.getMessage());
 
         } catch (IllegalArgumentException e) {
 
@@ -144,16 +154,28 @@ public class AdminPermissionRequestController {
 
     @GetMapping("/user/{targetUserId}")
     public ResponseEntity<?> getRequestsForUser(
-            @PathVariable Long targetUserId) {
+            @PathVariable Long targetUserId,
+            Authentication authentication) {
 
         try {
 
-            return ResponseEntity.ok(
+            requireReviewRole(authentication);
+
+            List<AdminPermissionRequest> requests =
                     permissionRequestService
                             .getRequestsForUser(
                                     targetUserId
-                            )
+                            );
+
+            return ResponseEntity.ok(
+                    toResponseList(requests)
             );
+
+        } catch (SecurityException e) {
+
+            return ResponseEntity
+                    .status(HttpStatus.FORBIDDEN)
+                    .body(e.getMessage());
 
         } catch (Exception e) {
 
@@ -161,9 +183,7 @@ public class AdminPermissionRequestController {
                     .status(
                             HttpStatus.INTERNAL_SERVER_ERROR
                     )
-                    .body(
-                            e.getMessage()
-                    );
+                    .body(e.getMessage());
         }
     }
 
@@ -174,16 +194,26 @@ public class AdminPermissionRequestController {
     @GetMapping("/status/{status}")
     public ResponseEntity<?> getRequestsByStatus(
             @PathVariable
-            AdminPermissionRequestStatus status) {
+            AdminPermissionRequestStatus status,
+            Authentication authentication) {
 
         try {
 
-            return ResponseEntity.ok(
+            requireReviewRole(authentication);
+
+            List<AdminPermissionRequest> requests =
                     permissionRequestService
-                            .getRequestsByStatus(
-                                    status
-                            )
+                            .getRequestsByStatus(status);
+
+            return ResponseEntity.ok(
+                    toResponseList(requests)
             );
+
+        } catch (SecurityException e) {
+
+            return ResponseEntity
+                    .status(HttpStatus.FORBIDDEN)
+                    .body(e.getMessage());
 
         } catch (Exception e) {
 
@@ -199,7 +229,9 @@ public class AdminPermissionRequestController {
     // ACCOUNT MANAGER APPROVE
     // =========================================================
 
-    @PostMapping("/{requestId}/account-manager/approve")
+    @PostMapping(
+            "/{requestId}/account-manager/approve"
+    )
     public ResponseEntity<?> approveByAccountManager(
             @PathVariable Long requestId,
             @RequestBody(required = false)
@@ -222,7 +254,8 @@ public class AdminPermissionRequestController {
                             );
 
             return ResponseEntity.ok(
-                    updated
+                    AdminPermissionRequestResponse
+                            .from(updated)
             );
 
         } catch (SecurityException e) {
@@ -249,7 +282,9 @@ public class AdminPermissionRequestController {
     // ACCOUNT MANAGER REJECT
     // =========================================================
 
-    @PostMapping("/{requestId}/account-manager/reject")
+    @PostMapping(
+            "/{requestId}/account-manager/reject"
+    )
     public ResponseEntity<?> rejectByAccountManager(
             @PathVariable Long requestId,
             @RequestBody(required = false)
@@ -272,7 +307,8 @@ public class AdminPermissionRequestController {
                             );
 
             return ResponseEntity.ok(
-                    updated
+                    AdminPermissionRequestResponse
+                            .from(updated)
             );
 
         } catch (SecurityException e) {
@@ -299,7 +335,9 @@ public class AdminPermissionRequestController {
     // SUPER ADMIN APPROVE
     // =========================================================
 
-    @PostMapping("/{requestId}/super-admin/approve")
+    @PostMapping(
+            "/{requestId}/super-admin/approve"
+    )
     public ResponseEntity<?> approveBySuperAdmin(
             @PathVariable Long requestId,
             @RequestBody(required = false)
@@ -322,7 +360,8 @@ public class AdminPermissionRequestController {
                             );
 
             return ResponseEntity.ok(
-                    updated
+                    AdminPermissionRequestResponse
+                            .from(updated)
             );
 
         } catch (SecurityException e) {
@@ -349,7 +388,9 @@ public class AdminPermissionRequestController {
     // SUPER ADMIN REJECT
     // =========================================================
 
-    @PostMapping("/{requestId}/super-admin/reject")
+    @PostMapping(
+            "/{requestId}/super-admin/reject"
+    )
     public ResponseEntity<?> rejectBySuperAdmin(
             @PathVariable Long requestId,
             @RequestBody(required = false)
@@ -372,7 +413,8 @@ public class AdminPermissionRequestController {
                             );
 
             return ResponseEntity.ok(
-                    updated
+                    AdminPermissionRequestResponse
+                            .from(updated)
             );
 
         } catch (SecurityException e) {
@@ -393,6 +435,66 @@ public class AdminPermissionRequestController {
                     .status(HttpStatus.NOT_FOUND)
                     .body(e.getMessage());
         }
+    }
+
+    // =========================================================
+    // CONVERT LIST
+    // =========================================================
+
+    private List<AdminPermissionRequestResponse>
+    toResponseList(
+            List<AdminPermissionRequest> requests) {
+
+        return requests
+                .stream()
+                .map(
+                        AdminPermissionRequestResponse::from
+                )
+                .toList();
+    }
+
+    // =========================================================
+    // REVIEW ROLE CHECK
+    // =========================================================
+
+    private void requireReviewRole(
+            Authentication authentication) {
+
+        if (authentication == null ||
+                !authentication.isAuthenticated()) {
+
+            throw new SecurityException(
+                    "Authentication is required."
+            );
+        }
+
+        String authority =
+                authentication
+                        .getAuthorities()
+                        .stream()
+                        .map(authorityValue ->
+                                authorityValue
+                                        .getAuthority())
+                        .filter(value ->
+                                value.startsWith("ROLE_"))
+                        .findFirst()
+                        .orElse("");
+
+        if ("ROLE_ACCOUNT_MANAGER".equalsIgnoreCase(
+                authority
+        )) {
+            return;
+        }
+
+        if ("ROLE_SUPER_ADMIN".equalsIgnoreCase(
+                authority
+        )) {
+            return;
+        }
+
+        throw new SecurityException(
+                "Only ACCOUNT_MANAGER or SUPER_ADMIN can review permission requests."
+        );
     }
 
     // =========================================================

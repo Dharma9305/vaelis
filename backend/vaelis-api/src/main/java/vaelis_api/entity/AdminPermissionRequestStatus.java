@@ -3,37 +3,35 @@ package vaelis_api.entity;
 /**
  * Status of an administrative permission request.
  *
- * Permission is NOT added to AdminUser.permissions
- * until the request reaches APPROVED.
+ * A permission is added to AdminUser.permissions ONLY
+ * after final SUPER_ADMIN approval.
  */
 public enum AdminPermissionRequestStatus {
 
     /**
-     * Request created by ADMIN / EMPLOYEE /
-     * ACCOUNT_MANAGER and waiting for Account Manager review.
+     * Initial state.
      */
     PENDING_ACCOUNT_MANAGER,
 
     /**
      * Account Manager approved.
-     * Waiting for Super Admin final approval.
+     * Final Super Admin approval is required.
      */
     PENDING_SUPER_ADMIN,
 
     /**
-     * Final approval by Super Admin.
-     *
-     * Permission can now be activated.
+     * Final approval completed.
+     * Permission has been activated.
      */
     APPROVED,
 
     /**
-     * Rejected by Account Manager.
+     * Account Manager rejected the request.
      */
     REJECTED_BY_ACCOUNT_MANAGER,
 
     /**
-     * Rejected by Super Admin.
+     * Super Admin rejected the request.
      */
     REJECTED_BY_SUPER_ADMIN
 }
