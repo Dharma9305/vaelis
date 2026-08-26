@@ -1,0 +1,10 @@
+
+# =========================================================
+# LOCAL PRODUCT API TEST PAYLOADS
+# =========================================================
+
+product-crud-test.json
+product-crud-update-test.json
+product-low-stock-test.json
+product-stock-toggle-test.json
+product-stock-update-test.json
