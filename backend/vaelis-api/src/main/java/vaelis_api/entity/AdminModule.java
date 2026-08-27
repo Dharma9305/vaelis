@@ -4,43 +4,27 @@ import jakarta.persistence.*;
 
 @Entity
 @Table(
-        name = "admin_permissions",
+        name = "admin_modules",
         indexes = {
                 @Index(
-                        name = "idx_admin_permissions_code",
+                        name = "idx_admin_modules_code",
                         columnList = "code",
                         unique = true
                 )
         }
 )
-public class AdminPermission {
+public class AdminModule {
 
     // =========================================================
     // ID
     // =========================================================
 
     @Id
-    @GeneratedValue(
-            strategy = GenerationType.IDENTITY
-    )
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     // =========================================================
-    // MODULE
-    // =========================================================
-
-    @ManyToOne(
-            fetch = FetchType.EAGER,
-            optional = false
-    )
-    @JoinColumn(
-            name = "module_id",
-            nullable = false
-    )
-    private AdminModule module;
-
-    // =========================================================
-    // PERMISSION CODE
+    // CODE
     // =========================================================
 
     @Column(
@@ -51,7 +35,7 @@ public class AdminPermission {
     private String code;
 
     // =========================================================
-    // PERMISSION NAME
+    // NAME
     // =========================================================
 
     @Column(
@@ -64,34 +48,28 @@ public class AdminPermission {
     // DESCRIPTION
     // =========================================================
 
-    @Column(
-            length = 500
-    )
+    @Column(length = 500)
     private String description;
 
     // =========================================================
     // ENABLED
     // =========================================================
 
-    @Column(
-            nullable = false
-    )
+    @Column(nullable = false)
     private boolean enabled = true;
 
     // =========================================================
     // CONSTRUCTORS
     // =========================================================
 
-    public AdminPermission() {
+    public AdminModule() {
     }
 
-    public AdminPermission(
-            AdminModule module,
+    public AdminModule(
             String code,
             String name,
             String description) {
 
-        this.module = module;
         this.code = code;
         this.name = name;
         this.description = description;
@@ -108,14 +86,6 @@ public class AdminPermission {
 
     public void setId(Long id) {
         this.id = id;
-    }
-
-    public AdminModule getModule() {
-        return module;
-    }
-
-    public void setModule(AdminModule module) {
-        this.module = module;
     }
 
     public String getCode() {
